@@ -67,7 +67,7 @@ jobs:
               #   done
               # fi
             fi
-            SIZE=$(stat -c%s "${APPNAME}_${PLATFORM}_v${VERSION}.fpk" 2>/dev/null | awk '{printf "%10.3f",$1/1024/1024}')
+            SIZE=$(stat -c%s "${APPNAME}_${PLATFORM}_v${VERSION}.fpk" 2>/dev/null | awk '{printf "%10.3f",$1/1024/1024}' | xargs)
             NAME=$(grep -w '^display_name' "${APP}/manifest" | awk -F= '{print $2}' | xargs)
             TYPE=$(grep -w '^install_type' "${APP}/manifest" | awk -F= '{print $2}' | xargs)
             distributor=$(grep -w '^distributor' "${APP}/manifest" | awk -F= '{print $2}' | xargs)
