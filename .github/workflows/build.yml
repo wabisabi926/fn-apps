@@ -78,6 +78,7 @@ jobs:
             \"platform\": \"${PLATFORM}\",
             \"version\": \"${VERSION}\",
             \"desc\": \"${DESC}\",
+            \"icon\": \"https://raw.githubusercontent.com/${REPO}/refs/heads/main/${APP}/ICON_256.PNG\",
             \"distributor\": \"${distributor}\",
             \"distributor_url\": \"${distributor_url}\",
             \"bug_report_url\": \"https://github.com/${REPO}/issues\",
