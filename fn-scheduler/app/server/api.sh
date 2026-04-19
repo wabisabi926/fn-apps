@@ -2,7 +2,7 @@
 [ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"
 set -euo pipefail
 
-SOCKET_PATH="${SOCKET_PATH:-/usr/local/apps/@appdata/fn-scheduler/scheduler.sock}"
+SOCKET_PATH="${SOCKET_PATH:-/var/apps/fn-scheduler/var/scheduler.sock}"
 TIMEOUT="${TIMEOUT:-8}"
 
 usage() {
@@ -16,7 +16,7 @@ Arguments:
   method     Optional HTTP method. Default: POST when data is provided, otherwise GET
 
 Environment:
-  SOCKET_PATH  Unix socket path (default: /usr/local/apps/@appdata/fn-scheduler/scheduler.sock)
+  SOCKET_PATH  Unix socket path (default: /var/apps/fn-scheduler/var/scheduler.sock)
   TIMEOUT      curl max-time in seconds (default: 8)
 
 Examples:

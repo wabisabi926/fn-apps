@@ -218,7 +218,7 @@ parse_backend_response() {
 
 proxy_api_request() {
   local backend_url curl_exit body_size
-  BACKEND_UNIX_SOCKET="${BACKEND_UNIX_SOCKET:-${SCHEDULER_UNIX_SOCKET:-/usr/local/apps/@appdata/fn-scheduler/scheduler.sock}}"
+  BACKEND_UNIX_SOCKET="${BACKEND_UNIX_SOCKET:-${SCHEDULER_UNIX_SOCKET:-/var/apps/fn-scheduler/var/scheduler.sock}}"
   BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
   BACKEND_PORT="${BACKEND_PORT:-28256}"
   BACKEND_CONNECT_TIMEOUT="${BACKEND_CONNECT_TIMEOUT:-5}"
