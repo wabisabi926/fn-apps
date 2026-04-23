@@ -39,8 +39,9 @@ curl -skL "https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fnOS.
 | jq -r '[.[] | select(.name=="fnOS-x86_64")] | sort_by((.version | split(".") | map(tonumber)), .version) | last | .url'
 ```
 
-## Proxmox VE One Click Install:
+## Proxmox VE
   ```
+  # One Click Install fnOS VM on Proxmox VE:
   curl -fsSL https://github.com/RROrg/fn-apps/raw/refs/heads/main/pve.sh | bash -s -- --arch x86_64
 
   # Optional Parameters:
@@ -56,6 +57,11 @@ curl -skL "https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fnOS.
 ## 社区支持
 
 - QQ 群：130359605 · [点击加入](https://qm.qq.com/q/xMUyJacSIw)
+
+- [https://github.com/RROrg/fn-apps](https://github.com/RROrg/fn-apps)
+- [https://github.com/Brian099/fn_fpk_packages](https://github.com/Brian099/fn_fpk_packages)
+- [https://gitee.com/laoknas/fn_fpk_packages](https://gitee.com/laoknas/fn_fpk_packages)
+
 - Issue：在 GitHub 提交问题/建议，描述部署环境、日志与复现步骤。
 - PR：欢迎补充新模块、修复脚本或完善文档，遵循现有目录结构即可。
 
@@ -65,4 +71,4 @@ curl -skL "https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fnOS.
 
 ## 8: License
 
-- [GPL-V3](https://github.com/RROrg/rr/blob/main/LICENSE)
+- [GPL-V3](https://github.com/RROrg/fn-apps/blob/main/LICENSE)

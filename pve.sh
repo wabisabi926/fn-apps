@@ -105,9 +105,10 @@ else
     echo "Failed to retrieve fnOS-${ARCH} ISO URL"
     exit 1
   }
-  ISO_PATH="/var/lib/vz/template/iso/$(basename "${ISO_URL}")"
   echo "Downloading fnOS-${ARCH} ISO ... "
+  ISO_PATH="/var/lib/vz/template/iso/$(basename "${ISO_URL}")"
   rm -f "${ISO_PATH}" || true
+  mkdir -p /var/lib/vz/template/iso >/dev/null 2>&1
   STATUS=$(curl -skL --connect-timeout 10 -w "%{http_code}" "${ISO_URL}" -o "${ISO_PATH}")
   if [ "${STATUS}" -ne 200 ]; then
     echo "Failed to download fnOS-${ARCH} ISO." >&2
