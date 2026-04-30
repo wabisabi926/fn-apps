@@ -1260,8 +1260,20 @@ class TaskRunner(threading.Thread):
             status = "failed"
             log_text = f"task execution exception: {exc!r}"
         finally:
-            self.db.finalize_result(result_id, status, log_text)
-            self.db.update_last_run(task_id)
+            try:
+                self.db.finalize_result(result_id, status, log_text)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.error(
+                    "Failed to finalize result %s for task %s: %s",
+                    result_id, task_id, exc, exc_info=True,
+                )
+            try:
+                self.db.update_last_run(task_id)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.error(
+                    "Failed to update last_run for task %s: %s",
+                    task_id, exc, exc_info=True,
+                )
 
     def _execute_script(self, script: str, timeout: Optional[int]) -> tuple[str, str]:
         cmd = self._build_command(script)
