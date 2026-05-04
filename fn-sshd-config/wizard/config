@@ -7,7 +7,7 @@
                 "helpText": "欢迎使用我们的应用！"
             },
             {
-                "type": "text",
+                "type": "password",
                 "field": "wizard_password",
                 "label": "设置 root 用户密码",
                 "rules": [
