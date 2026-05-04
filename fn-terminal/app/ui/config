@@ -4,9 +4,9 @@
       "title": "terminal",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
-      "protocol": "http",
-      "port": "${wizard_port}",
-      "url": "${wizard_base_path}",
+      "url": "/app/fn-terminal",
+      "gatewaySocket": "fn-terminal.sock",
+      "gatewayPrefix": "/app/fn-terminal",
       "allUsers": false,
       "control": {
         "accessPerm": "readonly",
