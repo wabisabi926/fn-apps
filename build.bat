@@ -6,7 +6,16 @@ REM .\fnpack.exe build --directory fn-kodi
 
 curl -kL https://static2.fnnas.com/fnpack/fnpack-1.0.4-windows-amd64 -o fnpack.exe
 
-for /d %%A in (fn-*) do (
+if not "%~1"=="" (
+    set "APPS=%*"
+) else (
+    set "APPS="
+    for /f "delims=" %%D in ('dir /b /ad "%CD%" ^| sort') do (
+        set "APPS=!APPS! "%%~fD""
+    )
+)
+
+for %%A in (%APPS%) do (
   if exist "%%A\norelease" (
     REM skip
     ) else if exist "%%A\manifest" (

@@ -6,7 +6,8 @@
 curl -kL https://static2.fnnas.com/fnpack/fnpack-1.0.4-linux-amd64 -o fnpack
 sudo chmod +x fnpack
 
-for APP in fn-*; do
+[ -n "$*" ] && APPS="$*" || APPS=$(find "${PWD}" -maxdepth 1 -type d | sort)
+for APP in ${APPS}; do
   [ -f "${APP}/norelease" ] && continue
   [ -f "${APP}/manifest" ] || continue
   APPNAME=$(grep -w '^appname' "${APP}/manifest" | awk -F= '{print $2}' | xargs)
