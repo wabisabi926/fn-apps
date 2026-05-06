@@ -302,6 +302,7 @@ button.ghost.selected {
 
 #taskTable th.sortable-header {
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
 }
 
