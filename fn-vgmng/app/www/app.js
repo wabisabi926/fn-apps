@@ -1,6 +1,5 @@
-const CGI_BASE_PATH = location.pathname.includes('index.cgi') ? '../www/cgi-bin/' : './cgi-bin/';
-const STATUS_ENDPOINT = `${CGI_BASE_PATH}status.cgi`;
-const ACTION_ENDPOINT = `${CGI_BASE_PATH}action.cgi`;
+const CGI_BASE_PATH = location.pathname.includes('index.cgi') ? '../www/' : './';
+const API_ENDPOINT = `${CGI_BASE_PATH}api.cgi`;
 const SUPPORTED_FILESYSTEMS = new Set(['btrfs', 'ext4', 'ext3', 'ext2', 'xfs', 'ntfs', 'ntfs3', 'exfat', 'vfat']);
 const RECOGNIZED_UNMOUNTABLE_FILESYSTEMS = new Set(['swap']);
 
@@ -840,7 +839,7 @@ function renderVolumes(volumes, statusData) {
 }
 
 async function loadStatus() {
-  const response = await fetch(STATUS_ENDPOINT, {
+  const response = await fetch(API_ENDPOINT, {
     method: 'GET',
     cache: 'no-store',
   });
@@ -857,7 +856,7 @@ async function loadStatus() {
 
 async function invokeAction(action, params = {}) {
   const requestBody = new URLSearchParams({ action, ...params });
-  const response = await fetch(ACTION_ENDPOINT, {
+  const response = await fetch(API_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',

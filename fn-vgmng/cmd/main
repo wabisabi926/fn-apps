@@ -2,8 +2,8 @@
 
 LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
-COMMON_SH="${TRIM_APPDEST}/www/cgi-bin/common.sh"
-ACTION_CGI="${TRIM_APPDEST}/www/cgi-bin/action.cgi"
+API_CGI="${TRIM_APPDEST}/www/api.cgi"
+AUTO_MOUNT_STATE_FILE="${TRIM_PKGVAR}/auto-mounts.state"
 
 # CGI runs on demand. Keep a lightweight status file so the app stays enabled.
 CMD=""
@@ -12,16 +12,21 @@ log_msg() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >>${LOG_FILE}
 }
 
+list_auto_mounts() {
+  [ -f "${AUTO_MOUNT_STATE_FILE}" ] || return 0
+  awk -F'|' 'NF >= 3 && $1 != "" && $2 != "" { print $1 "|" $2 "|" $3 }' "${AUTO_MOUNT_STATE_FILE}" 2>/dev/null
+}
+
 run_cgi_action() {
-  local request_body="$1"
-  local response=""
+  local request_payload="$1"
+  local api_response=""
   local response_body=""
 
-  [ -n "${request_body}" ] || return 1
-  [ -x "${ACTION_CGI}" ] || return 1
+  [ -n "${request_payload}" ] || return 1
+  [ -x "${API_CGI}" ] || return 1
 
-  response=$(printf '%s' "${request_body}" | CONTENT_LENGTH=${#request_body} CONTENT_TYPE=application/x-www-form-urlencoded REQUEST_METHOD=POST bash "${ACTION_CGI}" 2>/dev/null) || return 1
-  response_body=$(printf '%s' "${response}" | sed -n '/^{/,$p')
+  api_response=$(printf '%s' "${request_payload}" | CONTENT_LENGTH=${#request_payload} CONTENT_TYPE=application/x-www-form-urlencoded REQUEST_METHOD=POST bash "${API_CGI}" 2>/dev/null) || return 1
+  response_body=$(printf '%s' "${api_response}" | sed -n '/^{/,$p')
 
   case "${response_body}" in
     *'"ok":true'*)
@@ -29,9 +34,9 @@ run_cgi_action() {
       ;;
     *)
       if [ -n "${response_body}" ]; then
-        log_msg "CGI action failed for ${request_body}: ${response_body}"
+        log_msg "CGI action failed for ${request_payload}: ${response_body}"
       else
-        log_msg "CGI action failed for ${request_body}: empty response"
+        log_msg "CGI action failed for ${request_payload}: empty response"
       fi
       return 1
       ;;
@@ -51,7 +56,6 @@ start_process() {
 
   run_cgi_action "action=activate"
   local device="" target="" mode=""
-  . "${COMMON_SH}" || return 0
   while IFS='|' read -r device target mode; do
     [ -n "${device}" ] || continue
     [ -n "${target}" ] || continue
