@@ -4,10 +4,10 @@ LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
 
 ARCH=$(uname -m)
-BIN_PATH="${TRIM_APPDEST}/server/${ARCH:-}/usr/bin"
-LIB_PATH="${TRIM_APPDEST}/server/${ARCH:-}/usr/lib/:${TRIM_APPDEST}/server/${ARCH:-}/usr/lib/${ARCH:-}-linux-gnu"
-export PATH="${BIN_PATH}:${PATH:-}"
-export LD_LIBRARY_PATH="${LIB_PATH}:${LD_LIBRARY_PATH:-}"
+# BIN_PATH="${TRIM_APPDEST}/server/${ARCH:-}/usr/bin"
+# LIB_PATH="${TRIM_APPDEST}/server/${ARCH:-}/usr/lib/:${TRIM_APPDEST}/server/${ARCH:-}/usr/lib/${ARCH:-}-linux-gnu"
+# export PATH="${BIN_PATH}:${PATH:-}"
+# export LD_LIBRARY_PATH="${LIB_PATH}:${LD_LIBRARY_PATH:-}"
 
 locale -a 2>/dev/null | tr '[:upper:]' '[:lower:]' | grep -Eq "^zh_cn\.[utf-8|utf8]$" || localedef -i zh_CN -f UTF-8 zh_CN.UTF-8 >/dev/null 2>&1 || true
 
@@ -19,7 +19,7 @@ tmux set-option -g mouse on
 tmux kill-session -t __init__
 
 TTYDARGS=()
-TTYDARGS+=(ttyd -a -W)
+TTYDARGS+=(${TRIM_APPDEST}/server/ttyd.${ARCH:-} -a -W)
 TTYDARGS+=(-i "${TRIM_APPDEST}/fn-terminal.sock" -b "/app/fn-terminal")
 TTYDARGS+=(-t titleFixed=fnOS -t allow-clipboard-read=true -t allow-clipboard-write=true -t rendererType=canvas)
 TTYDARGS+=(tmux -u new -A -s terminal)
