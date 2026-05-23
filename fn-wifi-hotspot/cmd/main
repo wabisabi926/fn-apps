@@ -2,6 +2,7 @@
 
 LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
+API_FILE="${TRIM_APPDEST}/www/api.cgi"
 
 # write the command to start your program here
 CMD=""
@@ -10,20 +11,40 @@ log_msg() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >>${LOG_FILE}
 }
 
+restore_state() {
+  action="$1"
+  hotspot_state_file="${TRIM_APPDEST}/target/server/hotspot.state"
+
+  if [ ! -f "${hotspot_state_file}" ]; then
+    return 0
+  fi
+
+  if ! grep -Eq '^(HOTSPOT_ENABLED=1|ENABLED='"'"'1'"'"')$' "${hotspot_state_file}" 2>/dev/null; then
+    return 0
+  fi
+
+  for _ in $(seq 1 5); do
+    env QUERY_STRING="action=${action}" REQUEST_METHOD=GET "${API_FILE}" | grep -q '"ok": true' && return 0
+    sleep 5
+  done
+
+  return 1
+}
+
 start_process() {
   if status; then
     return 0
   fi
 
   log_msg "Starting process ..."
-  ${TRIM_APPDEST}/www/cgi-bin/restore_state.sh start >${LOG_FILE} 2>&1
+  restore_state start >${LOG_FILE} 2>&1 || true
   touch "${PID_FILE}"
   return 0
 }
 
 stop_process() {
   log_msg "Stopping process ..."
-  # ${TRIM_APPDEST}/www/cgi-bin/restore_state.sh stop >${LOG_FILE} 2>&1
+  # restore_state stop >${LOG_FILE} 2>&1
   rm -f "${PID_FILE}"
   return 0
 }

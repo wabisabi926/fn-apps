@@ -837,13 +837,21 @@ function renderClients(list) {
   clientsEl.appendChild(table);
 }
 
-// Determine CGI path prefix based on current URL.
-// - When hosted via /.../index.cgi/index.html, static files come from /.../index.cgi/...
-//   and executable CGIs are exposed under ../www/cgi-bin/.
-// - When hosted directly from /.../www/index.html, use ./cgi-bin/.
-const CGI_PREFIX = location.pathname.includes("index.cgi") ? "../www/cgi-bin/" : "cgi-bin/";
-const cgiUrl = (p) => {
-  const u = new URL(CGI_PREFIX + p, location.href);
+// Determine API path based on current URL.
+// - When hosted via /.../index.cgi/index.html, executable API is exposed under ../www/api.cgi.
+// - When hosted directly from /.../www/index.html, use ./api.cgi.
+const API_ENDPOINT = location.pathname.includes("index.cgi") ? "../www/api.cgi" : "api.cgi";
+const cgiUrl = (target) => {
+  const [rawAction, rawQuery = ""] = String(target || "").split("?", 2);
+  const action = rawAction.replace(/\.cgi$/, "");
+  const u = new URL(API_ENDPOINT, location.href);
+  u.searchParams.set("action", action);
+  if (rawQuery) {
+    const params = new URLSearchParams(rawQuery);
+    for (const [key, value] of params.entries()) {
+      u.searchParams.append(key, value);
+    }
+  }
   // Pass UI language to backend so CGI can localize messages.
   u.searchParams.set("lang", currentLang);
   return u.toString();
