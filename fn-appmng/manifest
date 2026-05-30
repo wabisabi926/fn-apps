@@ -1,7 +1,7 @@
 appname               = fn-appmng
 version               = 1.0.0
 display_name          = 应用坏心
-desc                  = 管理官方商店和第三方源应用管理
+desc                  = 官方商店和第三方源应用管理
 platform              = all
 source                = thirdparty
 desktop_uidir         = ui
