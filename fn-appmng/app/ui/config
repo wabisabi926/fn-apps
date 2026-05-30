@@ -1,0 +1,17 @@
+{
+  ".url": {
+    "fn-appmng.Application": {
+      "title": "应用坏心",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "url": "/app/fn-appmng",
+      "gatewaySocket": "fn-appmng.sock",
+      "gatewayPrefix": "/app/fn-appmng",
+      "allUsers": false,
+      "control": {
+        "accessPerm": "readonly",
+        "fullUrlPerm": "readonly"
+      }
+    }
+  }
+}

@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>应用管理</title>
+  <link rel="stylesheet" href="/app/fn-appmng/style.css">
+</head>
+
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <label class="side-search">
+        <span class="search-icon">⌕</span>
+        <input id="searchInput" type="search" placeholder="搜索">
+      </label>
+
+      <div class="side-section">
+        <div class="side-section-title">商店</div>
+        <button class="nav-item compact active" data-source-filter="all" type="button">全部商店</button>
+        <button class="nav-item compact" data-source-filter="official" type="button">官方商店</button>
+        <button class="nav-item compact" data-source-filter="thirdparty" type="button">三方商店</button>
+      </div>
+
+      <div class="side-spacer"></div>
+
+      <div class="side-footer">
+        <button id="settingsBtn" class="footer-action" type="button">
+          <span>⚙</span>
+          <span>设置</span>
+        </button>
+        <button id="aboutBtn" class="footer-action" type="button">
+          <span>ℹ</span>
+          <span>关于</span>
+        </button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section class="table-panel">
+        <div class="filter-bar">
+          <label class="filter-field">
+            <span>来源</span>
+            <select id="storeSelect">
+              <option value="all">全部来源</option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span>状态</span>
+            <select id="statusSelect">
+              <option value="all">全部</option>
+              <option value="downloaded">已下载</option>
+              <option value="undownloaded">未下载</option>
+              <option value="downloading">下载中</option>
+              <option value="failed">失败</option>
+            </select>
+          </label>
+          <div class="filter-actions">
+            <button id="refreshBtn" class="plain-btn top-refresh-btn" type="button">刷新</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="app-table">
+            <thead>
+              <tr>
+                <th>图标</th>
+                <th>名称</th>
+                <th>版本</th>
+                <th>商店</th>
+                <th>来源</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="appRows"></tbody>
+          </table>
+          <div id="emptyState" class="empty hidden">暂无应用</div>
+        </div>
+
+        <div class="pager-bar">
+          <div id="summary" class="summary">正在加载...</div>
+          <div class="pager">
+            <button id="prevPageBtn" class="page-btn pager-arrow" type="button">‹</button>
+            <div id="pageNumbers" class="page-numbers"></div>
+            <button id="nextPageBtn" class="page-btn pager-arrow" type="button">›</button>
+            <label class="page-size">
+              <span>每页条数:</span>
+              <select id="pageSizeSelect">
+                <option value="20">20</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+              </select>
+            </label>
+            <label class="jump-page">
+              <span>跳至</span>
+              <input id="jumpPageInput" type="number" min="1">
+              <span>页</span>
+            </label>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2>设置</h2>
+        </div>
+        <button class="icon-btn" data-close type="button" aria-label="关闭">×</button>
+      </div>
+      <form id="settingsForm">
+        <label class="settings-label">
+          <span>保存路径</span>
+          <input id="downloadDirInput" type="text" spellcheck="false"
+            placeholder="/var/apps/fn-appmng/shares/fn-appmng/downloads">
+        </label>
+        <div class="settings-label settings-list-block">
+          <div class="settings-list-head">
+            <span>源地址</span>
+            <button id="addSourceBtn" class="plain-btn add-source-btn" type="button">添加源</button>
+          </div>
+          <div id="sourceList" class="source-list"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="plain-btn" data-close type="button">取消</button>
+          <button class="primary-btn" type="submit">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="aboutModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2>关于</h2>
+        </div>
+        <button class="icon-btn" data-close type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="about-body">
+        <div class="about-section">
+          <p class="about-declaration">本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。</p>
+        </div>
+
+        <div class="about-section">
+          <h3>社区支持</h3>
+          <ul class="about-list">
+            <li>QQ 群：130359605 · <a href="https://qm.qq.com/q/xMUyJacSIw" target="_blank"
+                rel="noopener noreferrer">点击加入</a></li>
+            <li>Github：<a href="https://github.com/RROrg/fn-apps" target="_blank"
+                rel="noopener noreferrer">RROrg/fn-apps</a></li>
+          </ul>
+        </div>
+
+        <div class="about-section">
+          <h3>赞助支持</h3>
+          <img class="about-sponsor-image"
+            src="https://raw.githubusercontent.com/wjz304/wjz304/master/my/buymeacoffee.png" alt="sponsoring">
+        </div>
+
+        <div class="about-copyright">
+          <a href="https://github.com/RROrg" target="_blank" rel="noopener noreferrer">RROrg</a>
+          <a href="https://github.com/wjz304" target="_blank" rel="noopener noreferrer">wjz304</a>
+          <span>© 2026 RROrg, Ing, Inc.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/app/fn-appmng/app.js"></script>
+</body>
+
+</html>

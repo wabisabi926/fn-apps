@@ -1,0 +1,13 @@
+appname               = fn-appmng
+version               = 1.0.0
+display_name          = 应用坏心
+desc                  = 管理官方商店和第三方源应用管理
+platform              = all
+source                = thirdparty
+desktop_uidir         = ui
+desktop_applaunchname = fn-appmng.Application
+maintainer            = Ing
+maintainer_url        = https://github.com/RROrg
+distributor           = RROrg
+distributor_url       = https://github.com/RROrg/fn-apps
+reloadui              = yes
