@@ -8,7 +8,7 @@
       },
       {
         "type": "tips",
-        "helpText": "安装后请在 “虚拟机” 中启动/停止 fnOS-aarch64 虚拟机。"
+        "helpText": "安装后请在 “虚拟机” 中启动/停止 fn-vfnOS 虚拟机。"
       },
       {
         "type": "text",

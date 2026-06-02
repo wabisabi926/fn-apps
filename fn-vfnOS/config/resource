@@ -2,10 +2,10 @@
   "data-share": {
     "shares": [
       {
-        "name": "fn-fnOS-aarch64",
+        "name": "fn-vfnOS",
         "permission": {
           "rw": [
-            "fn-fnOS-aarch64"
+            "fn-vfnOS"
           ]
         }
       }

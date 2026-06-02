@@ -3,10 +3,10 @@
 ### This script is called after the user uninstalls the application.
 
 # 停止虚拟机
-virsh -c qemu:///system destroy fnOS-aarch64 2>/dev/null || true
+virsh -c qemu:///system destroy fn-vfnOS 2>/dev/null || true
 
 # 删除虚拟机定义
-virsh -c qemu:///system undefine fnOS-aarch64 2>/dev/null || true
+virsh -c qemu:///system undefine fn-vfnOS 2>/dev/null || true
 
 [ "${wizard_data_action:-}" == "delete" ] && {
   rm -rf "${TRIM_PKGVAR}"

@@ -1,0 +1,267 @@
+#!/bin/bash
+
+### This script is called after the user installs the application.
+
+SHARE_PATH="$(echo "${TRIM_DATA_SHARE_PATHS}" | cut -d':' -f1)"
+mkdir -p "${SHARE_PATH}"
+
+OVS_BRIDGE="$(ovs-vsctl list-br 2>/dev/null | head -n 1)"
+if [ -z "${OVS_BRIDGE}" ]; then
+  echo "Please ensure that OVS bridges are present." >$TRIM_TEMP_LOGFILE
+  exit 1
+fi
+
+ARCH="$(uname -m)"
+case "${ARCH}" in
+  "aarch64")
+    FNNAS="https://www.fnnas.com/download-arm"
+    CODE_BASE="/usr/share/AAVMF/AAVMF_CODE.fd"
+    VARS_BASE="/usr/share/AAVMF/AAVMF_VARS.fd"
+    ;;
+  "x86_64")
+    FNNAS="https://www.fnnas.com/download?key=fnos"
+    CODE_BASE="/usr/share/OVMF/OVMF_CODE.fd"
+    VARS_BASE="/usr/share/OVMF/OVMF_VARS.fd"
+    ;;
+  *)
+    echo "Unsupported architecture: ${ARCH}." >$TRIM_TEMP_LOGFILE
+    exit 1
+    ;;
+esac
+DISK_PATH="${SHARE_PATH}/fn-vfnOS.qcow2"
+CODE_PATH="${SHARE_PATH}/fn-vfnOS_CODE.fd"
+VARS_PATH="${SHARE_PATH}/fn-vfnOS_VARS.fd"
+
+if [ ! -f "${SHARE_PATH}/fn-vfnOS.iso" ]; then
+  ISO_URL="$(curl -sL "${FNNAS}" | grep -oP '{[^{}]*fnos[^,]*\.iso[^}]*thunder[^}]*"}' | sort -u | sed 's/\\\"/"/g' | jq -rs '.[0].thunder // empty' 2>/dev/null | sed 's/^thunder:\/\///' | base64 -d 2>/dev/null | sed 's/^AA//; s/ZZ$//')"
+  if [ -z "${ISO_URL}" ]; then
+    echo "Failed to retrieve fn-vfnOS ISO URL." >$TRIM_TEMP_LOGFILE
+    exit 1
+  fi
+  ISO_PATH="${SHARE_PATH}/fn-vfnOS.iso"
+  curl -skL "${ISO_URL}" -o "${ISO_PATH}"
+  [ $? -ne 0 ] && {
+    rm -f "${ISO_PATH}" 2>/dev/null || true
+    echo "Failed to download fn-vfnOS ISO." >$TRIM_TEMP_LOGFILE
+    exit 1
+  }
+fi
+
+if [ ! -f "${DISK_PATH}" ]; then
+  qemu-img create -f qcow2 "${DISK_PATH}" ${wizard_size:-128}G
+  [ $? -ne 0 ] && {
+    echo "Failed to create fn-vfnOS.qcow2 disk image." >$TRIM_TEMP_LOGFILE
+    exit 1
+  }
+fi
+if [ ! -f "${CODE_PATH}" ]; then
+  cp -f "${CODE_BASE}" "${CODE_PATH}"
+  [ $? -ne 0 ] && {
+    echo "Failed to prepare CODE file for fn-vfnOS." >$TRIM_TEMP_LOGFILE
+    exit 1
+  }
+fi
+if [ ! -f "${VARS_PATH}" ]; then
+  cp -f "${VARS_BASE}" "${VARS_PATH}"
+  [ $? -ne 0 ] && {
+    echo "Failed to prepare VARS file for fn-vfnOS." >$TRIM_TEMP_LOGFILE
+    exit 1
+  }
+fi
+
+EXISTING_UUID="$(virsh -c qemu:///system domuuid fn-vfnOS 2>/dev/null || true)"
+[ -z "${EXISTING_UUID}" ] && EXISTING_UUID="$(sed -n 's/.*<uuid>\(.*\)<\/uuid>.*/\1/p' "${SHARE_PATH}/fn-vfnOS.xml" 2>/dev/null | head -n 1)"
+[ -n "${EXISTING_UUID}" ] && UUID_XML="<uuid>${EXISTING_UUID}</uuid>" || UUID_XML=""
+
+case "${ARCH}" in
+  "aarch64")
+    cat >"${SHARE_PATH}/fn-vfnOS.xml" <<EOF
+<domain type='qemu'>
+  <name>fn-vfnOS</name>
+  <title>fn-vfnOS</title>
+  ${UUID_XML}
+  <memory unit='MiB'>${wizard_memory:-4096}</memory>
+  <currentMemory unit='MiB'>${wizard_memory:-4096}</currentMemory>
+  <vcpu placement='static'>${wizard_vcpu:-2}</vcpu>
+  <os>
+    <type arch='aarch64' machine='virt-7.2'>hvm</type>
+    <loader readonly='yes' type='pflash'>${CODE_PATH}</loader>
+    <nvram>${VARS_PATH}</nvram>
+    <boot dev='hd'/>
+    <boot dev='cdrom'/>
+  </os>
+  <features>
+    <acpi/>
+    <gic version='3'/>
+  </features>
+  <cpu mode='custom' match='exact'>
+    <model fallback='allow'>cortex-a72</model>
+  </cpu>
+  <qemu:commandline>
+    <qemu:arg value='-accel'/>
+    <qemu:arg value='tcg,thread=multi'/>
+  </qemu:commandline>
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <emulator>/usr/bin/qemu-system-aarch64</emulator>
+    <controller type='scsi' model='virtio-scsi'/>
+    <controller type='virtio-serial' index='0'/>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='${DISK_PATH}'/>
+      <target dev='sda' bus='scsi'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='${ISO_PATH}'/>
+      <target dev='sdb' bus='scsi'/>
+      <readonly/>
+    </disk>
+    <interface type='bridge'>
+      <source bridge='${OVS_BRIDGE}'/>
+      <virtualport type='openvswitch'/>
+      <model type='virtio'/>
+    </interface>
+    <controller type='usb' model='qemu-xhci'/>
+    <input type='tablet' bus='usb'/>
+    <input type='keyboard' bus='usb'/>
+    <video>
+      <model type='ramfb' heads='1' primary='yes'/>
+    </video>
+    <video>
+      <model type='virtio' heads='1' primary='no'/>
+    </video>
+    <audio id='1' type='none'/>
+    <sound model='ich9'>
+      <audio id='1'/>
+    </sound>
+    <graphics type='vnc' socket='/var/run/vms/fn-vfnOS.vnc.sock' powerControl='yes'>
+      <listen type='socket' socket='/var/run/vms/fn-vfnOS.vnc.sock'/>
+    </graphics>
+    <channel type='unix'>
+      <target type='virtio' name='org.qemu.guest_agent.0'/>
+    </channel>
+    <channel type='qemu-vdagent'>
+      <source>
+        <clipboard copypaste='yes'/>
+      </source>
+      <target type='virtio' name='com.redhat.spice.0'/>
+    </channel>
+    <console type='pty'/>
+  </devices>
+</domain>
+EOF
+    ;;
+  "x86_64")
+    cat >"${SHARE_PATH}/fn-vfnOS.xml" <<EOF
+<domain type='qemu'>
+  <name>fn-vfnOS</name>
+  <title>fn-vfnOS</title>
+  ${UUID_XML}
+  <memory unit='MiB'>${wizard_memory:-4096}</memory>
+  <currentMemory unit='MiB'>${wizard_memory:-4096}</currentMemory>
+  <vcpu placement='static'>${wizard_vcpu:-2}</vcpu>
+  <os>
+    <type arch='x86_64' machine='pc-q35-7.2'>hvm</type>
+    <loader readonly='yes' type='pflash'>${CODE_PATH}</loader>
+    <nvram>${VARS_PATH}</nvram>
+    <boot dev='hd'/>
+    <boot dev='cdrom'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+    <pae/>
+  </features>
+  <cpu mode='custom' match='exact'>
+    <model fallback='allow'>x86-64-v1</model>
+  </cpu>
+  <qemu:commandline>
+    <qemu:arg value='-accel'/>
+    <qemu:arg value='tcg,thread=multi'/>
+  </qemu:commandline>
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+
+    <controller type='scsi' model='virtio-scsi'/>
+    <controller type='virtio-serial' index='0'/>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='${DISK_PATH}'/>
+      <target dev='sda' bus='scsi'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='${ISO_PATH}'/>
+      <target dev='sdb' bus='scsi'/>
+      <readonly/>
+    </disk>
+    <interface type='bridge'>
+      <source bridge='${OVS_BRIDGE}'/>
+      <virtualport type='openvswitch'/>
+      <model type='virtio'/>
+    </interface>
+    <controller type='usb' model='qemu-xhci'/>
+    <input type='tablet' bus='usb'/>
+    <input type='keyboard' bus='usb'/>
+    <video>
+      <model type='virtio' heads='1' primary='yes'/>
+    </video>
+    <audio id='1' type='none'/>
+    <sound model='ich9'>
+      <audio id='1'/>
+    </sound>
+    <graphics type='vnc' socket='/var/run/vms/fn-vfnOS.vnc.sock' powerControl='yes'>
+      <listen type='socket' socket='/var/run/vms/fn-vfnOS.vnc.sock'/>
+    </graphics>
+    <channel type='unix'>
+      <target type='virtio' name='org.qemu.guest_agent.0'/>
+    </channel>
+    <channel type='qemu-vdagent'>
+      <source>
+        <clipboard copypaste='yes'/>
+      </source>
+      <target type='virtio' name='com.redhat.spice.0'/>
+    </channel>
+    <console type='pty'/>
+  </devices>
+</domain>
+EOF
+    ;;
+  *)
+    echo "Unsupported architecture: ${ARCH}." >$TRIM_TEMP_LOGFILE
+    exit 1
+    ;;
+esac
+
+virsh -c qemu:///system define "${SHARE_PATH}/fn-vfnOS.xml" >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+  echo "Failed to define libvirt domain fn-vfnOS." >$TRIM_TEMP_LOGFILE
+  #exit 1
+fi
+
+if [ "${wizard_autostart:-}" == "true" ]; then
+  virsh -c qemu:///system autostart fn-vfnOS >/dev/null 2>&1
+  if [ $? -ne 0 ]; then
+    echo "Failed to autostart libvirt domain fn-vfnOS." >$TRIM_TEMP_LOGFILE
+    exit 1
+  fi
+else
+  virsh -c qemu:///system autostart --disable fn-vfnOS >/dev/null 2>&1
+  if [ $? -ne 0 ]; then
+    echo "Failed to disable autostart for libvirt domain fn-vfnOS." >$TRIM_TEMP_LOGFILE
+    exit 1
+  fi
+fi
+
+chown -R libvirt-qemu:libvirt-qemu "${SHARE_PATH}"/* 2>/dev/null || true
+chmod -R ug+rw "${SHARE_PATH}/"* 2>/dev/null || true
+
+exit 0
