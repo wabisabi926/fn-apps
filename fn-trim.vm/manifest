@@ -1,0 +1,12 @@
+appname               = fn-trim.vm
+version               = 1.0.0
+display_name          = 虚拟机m
+desc                  = 强制开启虚拟机在手机端的 "导入/创建" 及 "VNC访问" 功能 (虚拟机升级/重装后也需要重新安装该软件)。
+platform              = all
+source                = thirdparty
+maintainer            = Ing
+maintainer_url        = https://github.com/RROrg
+distributor           = RROrg
+distributor_url       = https://github.com/RROrg/fn-apps
+ctl_stop              = false
+install_dep_apps      = trim.vm
