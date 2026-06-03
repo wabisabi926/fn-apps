@@ -10,12 +10,11 @@
 | 应用名称 | 版本 | 平台 | 描述 |
 |----------|------|------|------|
 | fn-VirtualHereServer | v4.8.6 | all | VirtualHere USB 服务器支持通过网络远程访问 USB 设备。 |
-| fn-appmng | v1.0.0 | all | 官方商店和第三方源应用管理 |
+| fn-appdownload | v1.0.1 | all | 官方商店和第三方源应用下载 |
 | fn-chromium | v1.0.2 | all | Chromium 是一个开源的网页浏览器项目，旨在为用户提供更安全、更快速和更稳定的浏览体验。 |
 | fn-chromium-desktop | v1.0.0 | all | Chromium-desktop 是一个基于 KMS/DRM 的网页浏览器及音频支持，旨在本地显示器提供浏览器功能。 |
 | fn-codeserver | v1.0.6 | all | code-server 是 VS Code 的在线版本，允许您通过浏览器进行代码编辑和开发。 |
 | fn-fail2ban | v1.0.2 | all | fail2ban 是一个开源的入侵防御工具，用于保护 Linux 服务器免受暴力破解攻击。 它通过监控日志文件，检测可疑的登录尝试，并自动封禁恶意 IP 地址，从而增强系统的安全性。 |
-| fn-fnOS-aarch64 | v1.0.0 | x86 | 基于 aarch64 架构 的 fnOS 系统。 |
 | fn-grafana-alloy | v1.13.2 | all | 可观测性数据收集器，收集系统日志、应用日志发送到 Loki |
 | fn-kodi | v1.0.6 | all | Kodi 是一个免费且开源的媒体播放器软件，用于播放视频、音频和图像。 |
 | fn-linux-station | v1.0.1 | all | Linux 工作站是一个基于 Linux 的桌面环境，旨在为用户提供一个高效、稳定和易用的工作环境。 |
@@ -26,6 +25,8 @@
 | fn-scrutiny-collector | v1.49.2 | all | 硬盘 S.M.A.R.T 健康监控采集器，定时采集硬盘健康数据发送到 Scrutiny Web 服务 |
 | fn-sshd-config | v1.0.6 | all | 设置 root 用户密码，修改 SSHD 配置. |
 | fn-terminal | v1.0.11 | all | terminal (ttyd + tmux) 是一个基于 Web 的终端应用程序，允许用户通过浏览器访问和管理服务器终端会话，提供便捷的远程终端操作体验。 |
+| fn-trim.vm | v1.0.0 | all | 强制开启虚拟机在手机端的 导入/创建 及 VNC访问 功能 (虚拟机升级/重装后也需要重新安装该软件)。 |
+| fn-vfnOS | v1.0.1 | all | 在 fnOS 系统中创建异架构的 fnOS 虚拟机（x86_64 fnOS 下则创建 aarch64 的 fnOS 虚拟机, aarch64 fnOS 下则创建 x86_64 的 fnOS 虚拟机）。 |
 | fn-vgmng | v1.0.1 | all | 存储池管理, 支持非飞牛存储池(其他NAS系统存储池)的管理。 |
 | fn-wifi-hotspot | v1.1.3 | all | 无线热点创建工具，允许用户轻松地将计算机变成一个 Wi-Fi 热点，分享网络连接给其他设备。 |
 | fn-zerotier | v1.0.3 | all | ZeroTier 是一个无中心的虚拟网络，无需配置即可连接设备。 |
