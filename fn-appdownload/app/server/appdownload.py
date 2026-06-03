@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-APP_NAME = "fn-appmng"
+APP_NAME = "fn-appdownload"
 APP_CENTER_SOCKET = "/var/run/com.trim.app.center.sock"
 VAR_DIR = Path(f"/var/apps/{APP_NAME}/var")
 SHARE_DIR = Path(f"/var/apps/{APP_NAME}/shares/{APP_NAME}")
@@ -64,13 +64,6 @@ def current_request():
     return getattr(REQUEST_CONTEXT, "value", None)
 
 
-def current_headers():
-    request = current_request()
-    if request:
-        return request.get("headers", {})
-    return {}
-
-
 def header_value(headers, name):
     if not headers:
         return ""
@@ -88,7 +81,7 @@ class ThreadingUnixHTTPServer(
     allow_reuse_address = True
 
     def __init__(self, socket_path, handler_cls, *, base_path, www_root):
-        self.server_name = "fn-appmng"
+        self.server_name = "fn-appdownload"
         self.server_port = 0
         self.base_path = normalize_base_path(base_path)
         self.www_root = Path(www_root)
@@ -132,11 +125,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         path = strip_base_path(parsed.path, self.server.base_path)
-        if (
-            path in {"/api", "/api.cgi"}
-            or path.startswith("/api/")
-            or path.startswith("/api.cgi/")
-        ):
+        if path.startswith("/api"):
             self.serve_api(parsed.query)
             return
         self.serve_static(path)
@@ -338,106 +327,27 @@ def request_body():
     return {key: values[-1] for key, values in parsed.items()}
 
 
-def token_candidates_from_text(text):
-    if not text:
-        return []
-    candidates = []
-    normalized = urllib.parse.unquote(str(text))
-    for separator in (";", ",", "{", "}", "[", "]"):
-        normalized = normalized.replace(separator, " ")
-    for quote in ('"', "'"):
-        normalized = normalized.replace(quote, " ")
-    for raw in normalized.split():
-        value = raw.strip().strip('"').strip("'")
-        lowered = value.lower()
-        if lowered in {
-            "trim",
-            "bearer",
-            "token",
-            "access_token",
-            "authorization",
-            "auth",
-            "session",
-        }:
-            continue
-        if lowered.startswith("trim "):
-            value = value.split(None, 1)[1]
-        if lowered.startswith("bearer "):
-            value = value.split(None, 1)[1]
-        if "=" in value or ":" in value:
-            value = value.rsplit("=", 1)[-1].rsplit(":", 1)[-1].strip()
-        if len(value) >= 32 and all(ch.isalnum() or ch in "+/=_-." for ch in value):
-            candidates.append(value)
-    return candidates
-
-
-def token_from_cookie(cookie):
-    if not cookie:
-        return ""
-    parsed = {}
-    for part in str(cookie).split(";"):
-        key, _, value = part.strip().partition("=")
-        if key:
-            parsed[key.lower()] = urllib.parse.unquote(value)
-    preferred_keys = (
-        "trim_token",
-        "trim-token",
-        "trimtoken",
-        "fnos_token",
-        "fnos-token",
-        "fno_token",
-        "fno-token",
-        "app_center_token",
-        "app-center-token",
-        "token",
-        "access_token",
-        "access-token",
-        "authorization",
-        "auth",
-        "session",
-        "sid",
-    )
-    for key in preferred_keys:
-        for item_key, item_value in parsed.items():
-            if key == item_key or key in item_key:
-                for candidate in token_candidates_from_text(item_value):
-                    return candidate
-    for item_value in parsed.values():
-        for candidate in token_candidates_from_text(item_value):
-            return candidate
-    return ""
-
-
 def incoming_token():
-    request_headers = current_headers()
-    auth = (
-        header_value(request_headers, "Authorization")
-        or os.environ.get("HTTP_AUTHORIZATION")
-        or os.environ.get("Authorization")
-        or ""
-    )
+    request = current_request()
+    if not request:
+        return ""
+
+    auth = header_value(request.get("headers", {}), "Authorization") or os.environ.get("Authorization", "")
     if auth.lower().startswith("trim "):
         return auth.split(None, 1)[1].strip()
-    if auth.lower().startswith("bearer "):
-        return auth.split(None, 1)[1].strip()
-    for candidate in token_candidates_from_text(auth):
-        return candidate
-    for header_name in (
-        "X-Trim-Token",
-        "X-Auth-Token",
-        "X-Access-Token",
-        "X-FN-Token",
-        "X-FNOS-Token",
-    ):
-        header_key = "HTTP_" + header_name.upper().replace("-", "_")
-        for candidate in token_candidates_from_text(
-            header_value(request_headers, header_name) or os.environ.get(header_key, "")
-        ):
-            return candidate
-    cookie = header_value(request_headers, "Cookie") or os.environ.get(
-        "HTTP_COOKIE", ""
-    )
-    return token_from_cookie(cookie)
+
+    cookie = header_value(request.get("headers", {}), "Cookie") or os.environ.get("HTTP_COOKIE", "")
+    if cookie:
+        parsed = {}
+        for part in str(cookie).split(";"):
+            key, _, value = part.strip().partition("=")
+            if key:
+                parsed[key.lower()] = urllib.parse.unquote(value)
+
+        for item_key, item_value in parsed.items():
+            if "fnos-token" == item_key or "fnos-token" in item_key:
+                return item_value
+    return ""
 
 
 def decode_chunked(data):
@@ -1050,9 +960,9 @@ def dispatch():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="fn-appmng Unix socket server")
+    parser = argparse.ArgumentParser(description="fn-appdownload Unix socket server")
     parser.add_argument("--unix-socket", required=True)
-    parser.add_argument("--base-path", default="/app/fn-appmng")
+    parser.add_argument("--base-path", default="/app/fn-appdownload")
     parser.add_argument("--www-root", required=True)
     args = parser.parse_args()
 

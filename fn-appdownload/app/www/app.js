@@ -1,5 +1,5 @@
-const API_ENDPOINT = location.pathname.includes("/app/fn-appmng")
-  ? "/app/fn-appmng/api"
+const API_ENDPOINT = location.pathname.includes("/app/fn-appdownload")
+  ? "/app/fn-appdownload/api"
   : location.pathname.includes("index.cgi")
     ? "../www/api.cgi"
     : "./api.cgi";

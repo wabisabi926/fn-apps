@@ -1,11 +1,11 @@
-appname               = fn-appmng
-version               = 1.0.0
+appname               = fn-appdownload
+version               = 1.0.1
 display_name          = 应用坏心
-desc                  = 官方商店和第三方源应用管理
+desc                  = 官方商店和第三方源应用下载
 platform              = all
 source                = thirdparty
 desktop_uidir         = ui
-desktop_applaunchname = fn-appmng.Application
+desktop_applaunchname = fn-appdownload.Application
 maintainer            = Ing
 maintainer_url        = https://github.com/RROrg
 distributor           = RROrg

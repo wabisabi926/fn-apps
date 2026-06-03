@@ -1,12 +1,12 @@
 {
   ".url": {
-    "fn-appmng.Application": {
+    "fn-appdownload.Application": {
       "title": "应用坏心",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
-      "url": "/app/fn-appmng",
-      "gatewaySocket": "fn-appmng.sock",
-      "gatewayPrefix": "/app/fn-appmng",
+      "url": "/app/fn-appdownload",
+      "gatewaySocket": "fn-appdownload.sock",
+      "gatewayPrefix": "/app/fn-appdownload",
       "allUsers": false,
       "control": {
         "accessPerm": "readonly",
