@@ -1,0 +1,6 @@
+[common]
+display_name="Application Download"
+desc="Official store and third-party source application downloads"
+
+[entry]
+title="Application Download"

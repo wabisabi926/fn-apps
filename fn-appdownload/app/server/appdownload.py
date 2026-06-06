@@ -453,6 +453,37 @@ def download_path_for(app_id, version, settings=None):
     return download_dir(settings) / file_name_for(app_id, version)
 
 
+def task_file_exists(task):
+    app_id = str(task.get("appId", ""))
+    version = str(task.get("version", ""))
+    candidates = []
+    if app_id and version:
+        candidates.append(download_path_for(app_id, version))
+    task_path = str(task.get("path") or "").strip()
+    if task_path:
+        candidates.append(Path(task_path))
+    return any(path.exists() for path in candidates)
+
+
+def file_status_for_apps(apps):
+    files = {}
+    if not isinstance(apps, list):
+        return files
+    for app in apps:
+        if not isinstance(app, dict):
+            continue
+        store = str(app.get("store") or "")
+        app_id = str(app.get("id") or "")
+        version = str(app.get("version") or "")
+        if not store or not app_id or not version:
+            continue
+        key = task_key(store, app_id, version)
+        target = download_path_for(app_id, version)
+        exists = target.exists()
+        files[key] = {"exists": exists, "path": str(target) if exists else ""}
+    return files
+
+
 def is_done_status(status):
     normalized = str(status or "").lower()
     return normalized in {
@@ -718,6 +749,7 @@ def start_third_party_download(app):
         "status": "downloading",
         "url": url,
         "path": str(target),
+        "fileExists": False,
         "updatedAt": int(time.time()),
     }
     save_tasks(tasks)
@@ -758,6 +790,7 @@ def delete_download(app):
         "status": "deleted",
         "deleted": True,
         "path": "",
+        "fileExists": False,
         "updatedAt": int(time.time()),
     }
     save_tasks(tasks)
@@ -780,7 +813,7 @@ def download_worker(key, url, target):
                 output.write(chunk)
         os.replace(tmp, target)
         finalize_download_file(target)
-        update_task(key, status="downloaded", path=target, error="")
+        update_task(key, status="downloaded", path=target, fileExists=True, error="")
     except Exception as exc:
         try:
             if os.path.exists(tmp):
@@ -824,6 +857,7 @@ def official_download(app):
         "taskId": task_id,
         "status": "downloading",
         "path": str(download_path_for(app_id, version)),
+        "fileExists": False,
         "updatedAt": int(time.time()),
         "raw": result,
     }
@@ -839,10 +873,22 @@ def refresh_official_status(task_id):
     return result
 
 
-def status_payload():
+def status_payload(apps=None):
     tasks = read_tasks()
     changed = False
     for key, task in list(tasks["tasks"].items()):
+        exists = task_file_exists(task)
+        if task.get("fileExists") != exists:
+            task["fileExists"] = exists
+            changed = True
+        if is_done_status(task.get("status")) and not exists:
+            task["status"] = "deleted"
+            task["deleted"] = True
+            task["path"] = ""
+            task["fileExists"] = False
+            task["updatedAt"] = int(time.time())
+            changed = True
+            continue
         if task.get("deleted"):
             continue
         if task.get("store") != "official" or not task.get("taskId"):
@@ -864,6 +910,7 @@ def status_payload():
             if target.exists():
                 finalize_download_file(target)
                 status = "downloaded"
+                task["fileExists"] = True
             else:
                 source_path = source_path_for_official(task, raw)
                 if source_path:
@@ -875,6 +922,7 @@ def status_payload():
                             task["path"] = packaged_path
                             task["status"] = "downloaded"
                             task["error"] = ""
+                            task["fileExists"] = True
                             task["rawStatus"] = raw
                             task["updatedAt"] = int(time.time())
                             changed = True
@@ -892,26 +940,29 @@ def status_payload():
                 if target.exists():
                     task["path"] = str(target)
                     task["error"] = ""
+                    task["fileExists"] = True
                 elif is_done_status(status):
                     source_path = source_path_for_official(task, raw)
-                    try:
-                        packaged_path = package_official_download(
-                            task.get("appId", ""), task.get("version", ""), source_path
-                        )
-                        if packaged_path:
-                            task["path"] = packaged_path
-                            task["status"] = "downloaded"
-                            task["error"] = ""
-                    except Exception as exc:
-                        task["status"] = "failed"
-                        task["error"] = str(exc)
+                    if source_path:
+                        try:
+                            packaged_path = package_official_download(
+                                task.get("appId", ""), task.get("version", ""), source_path
+                            )
+                            if packaged_path:
+                                task["path"] = packaged_path
+                                task["status"] = "downloaded"
+                                task["error"] = ""
+                                task["fileExists"] = True
+                        except Exception as exc:
+                            task["status"] = "failed"
+                            task["error"] = str(exc)
                 task["updatedAt"] = int(time.time())
                 changed = True
         except Exception:
             pass
     if changed:
         save_tasks(tasks)
-    return tasks
+    return {"tasks": tasks.get("tasks", {}), "files": file_status_for_apps(apps)}
 
 
 def dispatch():
@@ -954,7 +1005,7 @@ def dispatch():
             raise RuntimeError("missing app")
         json_response({"ok": True, "deleted": delete_download(app), **status_payload()})
     elif action == "status":
-        json_response({"ok": True, **status_payload()})
+        json_response({"ok": True, **status_payload(payload.get("apps"))})
     else:
         json_response({"ok": False, "message": "unsupported action"}, "400 Bad Request")
 

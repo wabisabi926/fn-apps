@@ -1,7 +1,7 @@
 {
   ".url": {
     "fn-appdownload.Application": {
-      "title": "应用坏心",
+      "title": "${entry.title}",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
       "url": "/app/fn-appdownload",

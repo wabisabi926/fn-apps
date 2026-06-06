@@ -14,6 +14,120 @@ const state = {
   statusFilter: "all",
   page: 1,
   pageSize: 50,
+  language: "zh-CN",
+};
+
+const I18N = {
+  "zh-CN": {
+    appTitle: "应用管理",
+    search: "搜索",
+    settings: "设置",
+    about: "关于",
+    shop: "商店",
+    allShops: "全部商店",
+    officialShop: "官方商店",
+    thirdPartyShop: "三方商店",
+    source: "来源",
+    allSources: "全部来源",
+    status: "状态",
+    all: "全部",
+    downloaded: "已下载",
+    undownloaded: "未下载",
+    downloading: "下载中",
+    failed: "失败",
+    refresh: "刷新",
+    icon: "图标",
+    name: "名称",
+    version: "版本",
+    action: "操作",
+    emptyApps: "暂无应用",
+    loading: "正在加载...",
+    loadFailed: "加载失败",
+    totalItems: "共 {total} 项",
+    pageSize: "每页条数:",
+    jumpTo: "跳至",
+    pageUnit: "页",
+    savePath: "保存路径",
+    sourceUrl: "源地址",
+    addSource: "添加源",
+    cancel: "取消",
+    save: "保存",
+    close: "关闭",
+    sourceName: "名称",
+    url: "URL",
+    toggleSource: "开启/关闭",
+    removeSource: "删除源",
+    officialStore: "官方商店",
+    thirdPartyStore: "三方商店",
+    delete: "删除",
+    download: "下载",
+    deleting: "删除中",
+    downloadingAction: "下载中",
+    deleted: "已删除",
+    downloadStarted: "已开始下载",
+    refreshed: "已刷新",
+    settingsSaved: "设置已保存",
+    store: "商店",
+    aboutDeclaration: "本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。",
+    communitySupport: "社区支持",
+    sponsorSupport: "赞助支持",
+    join: "点击加入",
+  },
+  "en-US": {
+    appTitle: "App Download",
+    search: "Search",
+    settings: "Settings",
+    about: "About",
+    shop: "Store",
+    allShops: "All Stores",
+    officialShop: "Official Store",
+    thirdPartyShop: "Third-party Store",
+    source: "Source",
+    allSources: "All Sources",
+    status: "Status",
+    all: "All",
+    downloaded: "Downloaded",
+    undownloaded: "Not Downloaded",
+    downloading: "Downloading",
+    failed: "Failed",
+    refresh: "Refresh",
+    icon: "Icon",
+    name: "Name",
+    version: "Version",
+    action: "Action",
+    emptyApps: "No apps",
+    loading: "Loading...",
+    loadFailed: "Load failed",
+    totalItems: "{total} items",
+    pageSize: "Per page:",
+    jumpTo: "Go to",
+    pageUnit: "page",
+    savePath: "Save Path",
+    sourceUrl: "Source URL",
+    addSource: "Add Source",
+    cancel: "Cancel",
+    save: "Save",
+    close: "Close",
+    sourceName: "Name",
+    url: "URL",
+    toggleSource: "Enable/Disable",
+    removeSource: "Remove source",
+    officialStore: "Official Store",
+    thirdPartyStore: "Third-party Store",
+    delete: "Delete",
+    download: "Download",
+    deleting: "Deleting",
+    downloadingAction: "Downloading",
+    deleted: "Deleted",
+    downloadStarted: "Download started",
+    refreshed: "Refreshed",
+    settingsSaved: "Settings saved",
+    store: "Store",
+    aboutDeclaration: "This community-maintained open source project is free and open source, intended only for learning and communication. Please follow local laws and platform terms.",
+    communitySupport: "Community Support",
+    sponsorSupport: "Sponsor Support",
+    join: "Join",
+  },
 };
 
 function escapeHtml(value) {
@@ -38,6 +152,56 @@ function taskFor(app) {
   return state.tasks[taskKey(app)] || {};
 }
 
+function statusAppPayload() {
+  return state.apps.map((app) => ({
+    store: app.store,
+    id: app.id,
+    version: app.version,
+  }));
+}
+
+function applyFileStatus(files = {}) {
+  state.apps.forEach((app) => {
+    const file = files[taskKey(app)];
+    if (!file) return;
+    app.downloaded = Boolean(file.exists);
+    app.path = file.exists ? file.path || app.path || "" : "";
+    if (file.exists) {
+      app.status = "downloaded";
+    } else if (
+      [
+        "downloaded",
+        "done",
+        "success",
+        "succeed",
+        "finished",
+        "completed",
+      ].includes(normalizeStatus(app.status)) ||
+      ["已下载", "下载完成"].includes(app.status)
+    ) {
+      app.status = "";
+    }
+  });
+}
+
+function rowsStateSignature() {
+  return filteredApps()
+    .map((app) => {
+      const task = taskFor(app);
+      const kind = statusKind(app);
+      return [
+        taskKey(app),
+        kind,
+        task.status || "",
+        app.status || "",
+        task.fileExists === false ? "0" : task.fileExists === true ? "1" : "",
+        app.downloaded ? "1" : "0",
+        task.path || app.path || "",
+      ].join("|");
+    })
+    .join("\n");
+}
+
 function normalizeStatus(value = "") {
   return String(value || "").toLowerCase();
 }
@@ -45,6 +209,7 @@ function normalizeStatus(value = "") {
 function isDownloaded(app) {
   const task = taskFor(app);
   if (task.deleted) return false;
+  if (task.fileExists === false) return false;
   const status = normalizeStatus(task.status || app.status);
   const doneStatus =
     [
@@ -57,7 +222,8 @@ function isDownloaded(app) {
     ].includes(status) ||
     ["已下载", "下载完成"].includes(task.status || app.status);
   return (
-    Boolean(app.downloaded) || (Boolean(task.path || app.path) && doneStatus)
+    Boolean(app.downloaded) ||
+    (task.fileExists === true && Boolean(task.path || app.path) && doneStatus)
   );
 }
 
@@ -71,10 +237,10 @@ function statusKind(app) {
 
 function statusText(app) {
   const kind = statusKind(app);
-  if (kind === "downloaded") return "已下载";
-  if (kind === "downloading") return "下载中";
-  if (kind === "failed") return "失败";
-  return "未下载";
+  if (kind === "downloaded") return t("downloaded");
+  if (kind === "downloading") return t("downloading");
+  if (kind === "failed") return t("failed");
+  return t("undownloaded");
 }
 
 function cookieValue(name) {
@@ -93,6 +259,149 @@ function safeDecode(value) {
     return decodeURIComponent(value || "");
   } catch (_error) {
     return value || "";
+  }
+}
+
+function storedValue(name) {
+  try {
+    return localStorage.getItem(name) || sessionStorage.getItem(name) || "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function parentStoredValue(name) {
+  try {
+    if (!window.parent || window.parent === window) return "";
+    return (
+      window.parent.localStorage.getItem(name) ||
+      window.parent.sessionStorage.getItem(name) ||
+      ""
+    );
+  } catch (_error) {
+    return "";
+  }
+}
+
+function queryValue(name) {
+  return new URLSearchParams(location.search).get(name) || "";
+}
+
+function normalizeLanguage(value) {
+  const language = safeDecode(value).replace("_", "-");
+  return language.toLowerCase().startsWith("zh") ? "zh-CN" : "en-US";
+}
+
+function currentLanguage() {
+  return normalizeLanguage(
+    cookieValue("language") ||
+      queryValue("language") ||
+      navigator.language ||
+      "zh-CN",
+  );
+}
+
+function t(key, params = {}) {
+  const messages = I18N[state.language] || I18N["zh-CN"];
+  return String(messages[key] || I18N["zh-CN"][key] || key).replace(
+    /\{(\w+)\}/g,
+    (_match, name) => params[name] ?? "",
+  );
+}
+
+function documentThemeValue(doc) {
+  if (!doc) return "";
+  const root = doc.documentElement;
+  const body = doc.body;
+  return (
+    [
+      body?.getAttribute("theme-mode"),
+      body?.dataset?.theme,
+      root?.dataset?.theme,
+      root?.classList?.contains("dark") ? "dark" : "",
+      root?.classList?.contains("light") ? "light" : "",
+    ].find(Boolean) || ""
+  );
+}
+
+function parentDocumentThemeValue() {
+  try {
+    if (!window.parent || window.parent === window) return "";
+    return documentThemeValue(window.parent.document);
+  } catch (_error) {
+    return "";
+  }
+}
+
+function normalizeTheme(value) {
+  const theme = safeDecode(value).toLowerCase();
+  if (theme.includes("dark") || theme === "night") return "dark";
+  if (theme.includes("light") || theme === "day") return "light";
+  if (theme === "system" || theme === "auto" || theme === "os") {
+    return prefersDarkTheme() ? "dark" : "light";
+  }
+  return "";
+}
+
+function themeMedia() {
+  return typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-color-scheme: dark)")
+    : null;
+}
+
+function prefersDarkTheme() {
+  return Boolean(themeMedia()?.matches);
+}
+
+function currentTheme() {
+  const fromSystem = [
+    queryValue("theme"),
+    cookieValue("fnos-theme-mode"),
+    cookieValue("os-theme-mode"),
+    storedValue("fnos-theme-mode"),
+    storedValue("os-theme-mode"),
+    parentStoredValue("fnos-theme-mode"),
+    parentStoredValue("os-theme-mode"),
+    documentThemeValue(document),
+    parentDocumentThemeValue(),
+    queryValue("fnos-theme-mode"),
+  ]
+    .map(normalizeTheme)
+    .find(Boolean);
+  if (fromSystem) return fromSystem;
+  return prefersDarkTheme() ? "dark" : "light";
+}
+
+function applyTheme() {
+  const theme = currentTheme();
+  document.documentElement.dataset.theme = theme;
+  document.body.dataset.theme = theme;
+}
+
+function applyPreferences({ rerender = false } = {}) {
+  const nextLanguage = currentLanguage();
+  const languageChanged = nextLanguage !== state.language;
+
+  state.language = nextLanguage;
+  document.documentElement.lang = nextLanguage;
+  document.title = t("appTitle");
+  applyTheme();
+
+  document.querySelectorAll("[data-i18n]").forEach((node) => {
+    node.textContent = t(node.dataset.i18n);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
+    node.placeholder = t(node.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach((node) => {
+    node.title = t(node.dataset.i18nTitle);
+    node.setAttribute("aria-label", t(node.dataset.i18nTitle));
+  });
+
+  if (rerender && languageChanged) {
+    renderSourceSelect();
+    renderSourceList(state.settings.thirdPartySources || []);
+    renderRows();
   }
 }
 
@@ -203,7 +512,7 @@ function renderPager(total, totalPages) {
   prev.disabled = state.page <= 1;
   next.disabled = state.page >= totalPages;
   document.getElementById("jumpPageInput").max = String(totalPages);
-  document.getElementById("summary").textContent = `共 ${total} 项`;
+  document.getElementById("summary").textContent = t("totalItems", { total });
 }
 
 function renderRows() {
@@ -234,12 +543,12 @@ function renderRows() {
           <div class="app-id">${escapeHtml(app.id || "")}</div>
         </td>
         <td>${escapeHtml(app.version || "-")}</td>
-        <td>${app.store === "official" ? "官方商店" : "三方商店"}</td>
+        <td>${app.store === "official" ? t("officialStore") : t("thirdPartyStore")}</td>
         <td>${escapeHtml(app.source || "-")}</td>
         <td><span class="status-pill ${kind}">${escapeHtml(statusText(app))}</span></td>
         <td>
           <button class="download-btn ${downloaded ? "delete-btn" : ""}" data-action="${downloaded ? "delete" : "download"}" data-app-key="${escapeHtml(taskKey(app))}" ${!downloaded && !canDownload ? "disabled" : ""} type="button">
-            ${downloaded ? "删除" : "下载"}
+            ${downloaded ? t("delete") : t("download")}
           </button>
         </td>
       </tr>
@@ -260,7 +569,7 @@ async function loadSettings() {
 }
 
 async function loadApps() {
-  document.getElementById("summary").textContent = "正在加载...";
+  document.getElementById("summary").textContent = t("loading");
   const [official, thirdparty] = await Promise.allSettled([
     api("official-list"),
     api("thirdparty-list"),
@@ -276,8 +585,8 @@ async function loadApps() {
       errors.push(...(result.value.errors || []));
     } else {
       errors.push({
-        source: "商店",
-        message: result.reason?.message || "加载失败",
+        source: t("store"),
+        message: result.reason?.message || t("loadFailed"),
       });
     }
   });
@@ -295,9 +604,13 @@ async function loadApps() {
 
 async function refreshStatus() {
   try {
-    const result = await api("status");
+    const before = rowsStateSignature();
+    const result = await api("status", { apps: statusAppPayload() });
     state.tasks = result.tasks || {};
-    renderRows();
+    applyFileStatus(result.files || {});
+    if (rowsStateSignature() !== before) {
+      renderRows();
+    }
   } catch (_error) {
     // Keep polling quiet.
   }
@@ -309,13 +622,13 @@ function sourceRowTemplate(source = {}) {
   const enabled = source.enabled !== false ? "checked" : "";
   return `
     <div class="source-row">
-      <label class="source-switch" title="开启/关闭">
+      <label class="source-switch" title="${escapeHtml(t("toggleSource"))}">
         <input class="source-enabled" type="checkbox" ${enabled}>
         <span></span>
       </label>
-      <input class="source-name" type="text" spellcheck="false" placeholder="名称" value="${name}">
-      <input class="source-url" type="text" spellcheck="false" placeholder="URL" value="${url}">
-      <button class="icon-btn source-remove" type="button" aria-label="删除源">×</button>
+      <input class="source-name" type="text" spellcheck="false" placeholder="${escapeHtml(t("sourceName"))}" value="${name}">
+      <input class="source-url" type="text" spellcheck="false" placeholder="${escapeHtml(t("url"))}" value="${url}">
+      <button class="icon-btn source-remove" type="button" aria-label="${escapeHtml(t("removeSource"))}" title="${escapeHtml(t("removeSource"))}">×</button>
     </div>
   `;
 }
@@ -369,7 +682,7 @@ function renderSourceSelect() {
   if (!sourceSelect) return;
   const options = sourceOptionsForView();
   const current = state.sourceFilter;
-  const fragments = ['<option value="all">全部来源</option>'];
+  const fragments = [`<option value="all">${escapeHtml(t("allSources"))}</option>`];
   options.forEach((source) => {
     fragments.push(
       `<option value="${escapeHtml(source)}">${escapeHtml(source)}</option>`,
@@ -383,9 +696,8 @@ function renderSourceSelect() {
 }
 
 function syncSourceControls() {
-  document.querySelectorAll("[data-source-filter]").forEach((node) => {
-    node.classList.toggle("active", node.dataset.sourceFilter === state.view);
-  });
+  const shopSelect = document.getElementById("shopSelect");
+  if (shopSelect) shopSelect.value = state.view;
   renderSourceSelect();
 }
 
@@ -404,14 +716,12 @@ function closeModals() {
 }
 
 function bindEvents() {
-  document.querySelectorAll("[data-source-filter]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.view = button.dataset.sourceFilter;
-      state.sourceFilter = "all";
-      syncSourceControls();
-      resetPaging();
-      renderRows();
-    });
+  document.getElementById("shopSelect").addEventListener("change", (event) => {
+    state.view = event.target.value;
+    state.sourceFilter = "all";
+    syncSourceControls();
+    resetPaging();
+    renderRows();
   });
 
   document.getElementById("storeSelect").addEventListener("change", (event) => {
@@ -467,7 +777,7 @@ function bindEvents() {
   document.getElementById("refreshBtn").addEventListener("click", async () => {
     try {
       await loadApps();
-      showToast("已刷新");
+      showToast(t("refreshed"));
     } catch (error) {
       showToast(error.message, true);
     }
@@ -510,7 +820,7 @@ function bindEvents() {
         });
         state.settings = result.settings || state.settings;
         closeModals();
-        showToast("设置已保存");
+        showToast(t("settingsSaved"));
         await loadApps();
       } catch (error) {
         showToast(error.message, true);
@@ -528,7 +838,8 @@ function bindEvents() {
       if (!app) return;
       const action = button.dataset.action;
       button.disabled = true;
-      button.textContent = action === "delete" ? "删除中" : "下载中";
+      button.textContent =
+        action === "delete" ? t("deleting") : t("downloadingAction");
       try {
         const result = await api(action, { app });
         if (action === "delete") {
@@ -536,21 +847,22 @@ function bindEvents() {
           app.downloaded = false;
           app.path = "";
           app.status = "";
-          showToast("已删除");
+          showToast(t("deleted"));
         } else {
           state.tasks[taskKey(app)] = result.task || {};
-          showToast("已开始下载");
+          showToast(t("downloadStarted"));
         }
         renderRows();
       } catch (error) {
         showToast(error.message, true);
         button.disabled = false;
-        button.textContent = action === "delete" ? "删除" : "下载";
+        button.textContent = action === "delete" ? t("delete") : t("download");
       }
     });
 }
 
 window.addEventListener("load", async () => {
+  applyPreferences();
   bindEvents();
   try {
     await loadSettings();
@@ -559,6 +871,10 @@ window.addEventListener("load", async () => {
     setInterval(refreshStatus, 4000);
   } catch (error) {
     showToast(error.message, true);
-    document.getElementById("summary").textContent = "加载失败";
+    document.getElementById("summary").textContent = t("loadFailed");
   }
 });
+
+themeMedia()?.addEventListener?.("change", () => applyPreferences());
+window.addEventListener("storage", () => applyPreferences({ rerender: true }));
+setInterval(() => applyPreferences({ rerender: true }), 1500);

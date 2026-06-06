@@ -13,26 +13,19 @@
     <aside class="sidebar">
       <label class="side-search">
         <span class="search-icon">⌕</span>
-        <input id="searchInput" type="search" placeholder="搜索">
+        <input id="searchInput" type="search" placeholder="搜索" data-i18n-placeholder="search">
       </label>
-
-      <div class="side-section">
-        <div class="side-section-title">商店</div>
-        <button class="nav-item compact active" data-source-filter="all" type="button">全部商店</button>
-        <button class="nav-item compact" data-source-filter="official" type="button">官方商店</button>
-        <button class="nav-item compact" data-source-filter="thirdparty" type="button">三方商店</button>
-      </div>
 
       <div class="side-spacer"></div>
 
       <div class="side-footer">
         <button id="settingsBtn" class="footer-action" type="button">
           <span>⚙</span>
-          <span>设置</span>
+          <span data-i18n="settings">设置</span>
         </button>
         <button id="aboutBtn" class="footer-action" type="button">
           <span>ℹ</span>
-          <span>关于</span>
+          <span data-i18n="about">关于</span>
         </button>
       </div>
     </aside>
@@ -41,23 +34,31 @@
       <section class="table-panel">
         <div class="filter-bar">
           <label class="filter-field">
-            <span>来源</span>
-            <select id="storeSelect">
-              <option value="all">全部来源</option>
+            <span data-i18n="shop">商店</span>
+            <select id="shopSelect">
+              <option value="all" data-i18n="allShops">全部商店</option>
+              <option value="official" data-i18n="officialShop">官方商店</option>
+              <option value="thirdparty" data-i18n="thirdPartyShop">三方商店</option>
             </select>
           </label>
           <label class="filter-field">
-            <span>状态</span>
+            <span data-i18n="source">来源</span>
+            <select id="storeSelect">
+              <option value="all" data-i18n="allSources">全部来源</option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span data-i18n="status">状态</span>
             <select id="statusSelect">
-              <option value="all">全部</option>
-              <option value="downloaded">已下载</option>
-              <option value="undownloaded">未下载</option>
-              <option value="downloading">下载中</option>
-              <option value="failed">失败</option>
+              <option value="all" data-i18n="all">全部</option>
+              <option value="downloaded" data-i18n="downloaded">已下载</option>
+              <option value="undownloaded" data-i18n="undownloaded">未下载</option>
+              <option value="downloading" data-i18n="downloading">下载中</option>
+              <option value="failed" data-i18n="failed">失败</option>
             </select>
           </label>
           <div class="filter-actions">
-            <button id="refreshBtn" class="plain-btn top-refresh-btn" type="button">刷新</button>
+            <button id="refreshBtn" class="plain-btn top-refresh-btn" type="button" data-i18n="refresh">刷新</button>
           </div>
         </div>
 
@@ -65,28 +66,28 @@
           <table class="app-table">
             <thead>
               <tr>
-                <th>图标</th>
-                <th>名称</th>
-                <th>版本</th>
-                <th>商店</th>
-                <th>来源</th>
-                <th>状态</th>
-                <th>操作</th>
+                <th data-i18n="icon">图标</th>
+                <th data-i18n="name">名称</th>
+                <th data-i18n="version">版本</th>
+                <th data-i18n="shop">商店</th>
+                <th data-i18n="source">来源</th>
+                <th data-i18n="status">状态</th>
+                <th data-i18n="action">操作</th>
               </tr>
             </thead>
             <tbody id="appRows"></tbody>
           </table>
-          <div id="emptyState" class="empty hidden">暂无应用</div>
+          <div id="emptyState" class="empty hidden" data-i18n="emptyApps">暂无应用</div>
         </div>
 
         <div class="pager-bar">
-          <div id="summary" class="summary">正在加载...</div>
+          <div id="summary" class="summary" data-i18n="loading">正在加载...</div>
           <div class="pager">
             <button id="prevPageBtn" class="page-btn pager-arrow" type="button">‹</button>
             <div id="pageNumbers" class="page-numbers"></div>
             <button id="nextPageBtn" class="page-btn pager-arrow" type="button">›</button>
             <label class="page-size">
-              <span>每页条数:</span>
+              <span data-i18n="pageSize">每页条数:</span>
               <select id="pageSizeSelect">
                 <option value="20">20</option>
                 <option value="50" selected>50</option>
@@ -94,9 +95,9 @@
               </select>
             </label>
             <label class="jump-page">
-              <span>跳至</span>
+              <span data-i18n="jumpTo">跳至</span>
               <input id="jumpPageInput" type="number" min="1">
-              <span>页</span>
+              <span data-i18n="pageUnit">页</span>
             </label>
           </div>
         </div>
@@ -108,26 +109,26 @@
     <div class="modal-content">
       <div class="modal-header">
         <div>
-          <h2>设置</h2>
+          <h2 data-i18n="settings">设置</h2>
         </div>
-        <button class="icon-btn" data-close type="button" aria-label="关闭">×</button>
+        <button class="icon-btn" data-close type="button" aria-label="关闭" data-i18n-title="close">×</button>
       </div>
       <form id="settingsForm">
         <label class="settings-label">
-          <span>保存路径</span>
+          <span data-i18n="savePath">保存路径</span>
           <input id="downloadDirInput" type="text" spellcheck="false"
             placeholder="/var/apps/fn-appdownload/shares/fn-appdownload/downloads">
         </label>
         <div class="settings-label settings-list-block">
           <div class="settings-list-head">
-            <span>源地址</span>
-            <button id="addSourceBtn" class="plain-btn add-source-btn" type="button">添加源</button>
+            <span data-i18n="sourceUrl">源地址</span>
+            <button id="addSourceBtn" class="plain-btn add-source-btn" type="button" data-i18n="addSource">添加源</button>
           </div>
           <div id="sourceList" class="source-list"></div>
         </div>
         <div class="modal-actions">
-          <button class="plain-btn" data-close type="button">取消</button>
-          <button class="primary-btn" type="submit">保存</button>
+          <button class="plain-btn" data-close type="button" data-i18n="cancel">取消</button>
+          <button class="primary-btn" type="submit" data-i18n="save">保存</button>
         </div>
       </form>
     </div>
@@ -137,27 +138,27 @@
     <div class="modal-content">
       <div class="modal-header">
         <div>
-          <h2>关于</h2>
+          <h2 data-i18n="about">关于</h2>
         </div>
-        <button class="icon-btn" data-close type="button" aria-label="关闭">×</button>
+        <button class="icon-btn" data-close type="button" aria-label="关闭" data-i18n-title="close">×</button>
       </div>
       <div class="about-body">
         <div class="about-section">
-          <p class="about-declaration">本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。</p>
+          <p class="about-declaration" data-i18n="aboutDeclaration">本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。</p>
         </div>
 
         <div class="about-section">
-          <h3>社区支持</h3>
+          <h3 data-i18n="communitySupport">社区支持</h3>
           <ul class="about-list">
             <li>QQ 群：130359605 · <a href="https://qm.qq.com/q/xMUyJacSIw" target="_blank"
-                rel="noopener noreferrer">点击加入</a></li>
+                rel="noopener noreferrer" data-i18n="join">点击加入</a></li>
             <li>Github：<a href="https://github.com/RROrg/fn-apps" target="_blank"
                 rel="noopener noreferrer">RROrg/fn-apps</a></li>
           </ul>
         </div>
 
         <div class="about-section">
-          <h3>赞助支持</h3>
+          <h3 data-i18n="sponsorSupport">赞助支持</h3>
           <img class="about-sponsor-image"
             src="https://raw.githubusercontent.com/wjz304/wjz304/master/my/buymeacoffee.png" alt="sponsoring">
         </div>
