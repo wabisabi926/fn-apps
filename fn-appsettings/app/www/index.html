@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>应用设置</title>
+  <link rel="stylesheet" href="/app/fn-appsettings/style.css">
+</head>
+
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="side-head">
+        <h1 data-i18n="apps">应用</h1>
+        <button id="refreshBtn" class="ghost-btn" type="button" data-i18n="refresh">刷新</button>
+      </div>
+      <label class="search-box">
+        <input id="searchInput" type="search" placeholder="搜索应用" data-i18n-placeholder="searchApps">
+      </label>
+      <div id="appList" class="app-list"></div>
+      <button id="aboutBtn" class="side-footer" type="button">
+        <span>i</span>
+        <strong data-i18n="about">关于</strong>
+      </button>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <h2 id="pageTitle">应用配置</h2>
+        <button id="saveBtn" class="primary-btn" type="button" data-i18n="save">保存修改</button>
+      </header>
+
+      <div id="emptyState" class="empty">正在加载...</div>
+      <form id="editor" class="editor hidden">
+        <section class="panel">
+          <h3 data-i18n="installInfo">安装信息</h3>
+          <div class="grid" id="appFields"></div>
+        </section>
+
+        <section class="panel">
+          <h3 data-i18n="privilegeConfig">权限配置</h3>
+          <label class="field wide">
+            <span>run-as</span>
+            <select id="runAsSelect">
+              <option value="package">package</option>
+              <option value="root">root</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <h3 data-i18n="wizardParams">Wizard 参数</h3>
+            <div class="row-actions">
+              <select id="envSelect"></select>
+              <button id="addEnvBtn" class="ghost-btn" type="button" data-i18n="addEntry">新增条目</button>
+              <button id="deleteEnvBtn" class="ghost-btn" type="button" data-i18n="deleteEntry">删除条目</button>
+            </div>
+          </div>
+          <div class="grid" id="envFields"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <h3 data-i18n="uiConfig">UI 配置</h3>
+            <div class="row-actions">
+              <select id="serviceSelect"></select>
+              <button id="addServiceBtn" class="ghost-btn" type="button" data-i18n="addEntry">新增条目</button>
+              <button id="deleteServiceBtn" class="ghost-btn" type="button" data-i18n="deleteEntry">删除条目</button>
+            </div>
+          </div>
+          <div class="grid" id="serviceFields"></div>
+        </section>
+      </form>
+    </main>
+  </div>
+
+  <div id="aboutModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 data-i18n="about">关于</h2>
+        </div>
+        <button class="icon-btn" data-close type="button" aria-label="关闭" data-i18n-title="close">×</button>
+      </div>
+      <div class="about-body">
+        <div class="about-section">
+          <p class="about-declaration" data-i18n="aboutDeclaration">本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。</p>
+        </div>
+
+        <div class="about-section">
+          <h3 data-i18n="communitySupport">社区支持</h3>
+          <ul class="about-list">
+            <li>QQ 群：130359605 · <a href="https://qm.qq.com/q/xMUyJacSIw" target="_blank"
+                rel="noopener noreferrer" data-i18n="join">点击加入</a></li>
+            <li>Github：<a href="https://github.com/RROrg/fn-apps" target="_blank"
+                rel="noopener noreferrer">RROrg/fn-apps</a></li>
+          </ul>
+        </div>
+
+        <div class="about-section">
+          <h3 data-i18n="sponsorSupport">赞助支持</h3>
+          <img class="about-sponsor-image"
+            src="https://raw.githubusercontent.com/wjz304/wjz304/master/my/buymeacoffee.png" alt="sponsoring">
+        </div>
+
+        <div class="about-copyright">
+          <a href="https://github.com/RROrg" target="_blank" rel="noopener noreferrer">RROrg</a>
+          <a href="https://github.com/wjz304" target="_blank" rel="noopener noreferrer">wjz304</a>
+          <span>© 2026 RROrg, Ing, Inc.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/app/fn-appsettings/app.js"></script>
+</body>
+
+</html>

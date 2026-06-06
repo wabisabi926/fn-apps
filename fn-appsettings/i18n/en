@@ -1,0 +1,6 @@
+[common]
+display_name="Application Settings"
+desc="Configure data for installed applications"
+
+[entry]
+title="Application Settings"

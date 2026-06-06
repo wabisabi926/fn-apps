@@ -1,0 +1,6 @@
+[common]
+display_name="应用设置"
+desc="设置已安装应用的数据"
+
+[entry]
+title="应用设置"

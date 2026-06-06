@@ -1,0 +1,17 @@
+{
+  ".url": {
+    "fn-appsettings.Application": {
+      "title": "${entry.title}",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "url": "/app/fn-appsettings",
+      "gatewaySocket": "fn-appsettings.sock",
+      "gatewayPrefix": "/app/fn-appsettings",
+      "allUsers": false,
+      "control": {
+        "accessPerm": "readonly",
+        "fullUrlPerm": "readonly"
+      }
+    }
+  }
+}

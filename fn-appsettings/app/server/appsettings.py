@@ -1,0 +1,775 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import mimetypes
+import os
+import shutil
+import signal
+import socket
+import socketserver
+import subprocess
+import sys
+import threading
+import urllib.parse
+from contextlib import contextmanager
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
+
+APP_NAME = "fn-appsettings"
+DB_NAME = "appcenter"
+DB_USER = "postgres"
+APP_CENTER_SOCKET = "/var/run/com.trim.app.center.sock"
+
+REQUEST_CONTEXT = threading.local()
+
+APP_COLUMNS = [
+    ("app_name", "text"),
+    ("name", "text"),
+    ("version", "text"),
+    ("version_id", "int"),
+    ("tags", "text"),
+    ("maintainer", "text"),
+    ("distributor", "text"),
+    ("download_count", "bigint"),
+    ("install_type", "text"),
+    ("path", "text"),
+    ("install_volume_id", "int"),
+    ("data_share_volume_id", "int"),
+    ("data_volume_id", "int"),
+    ("manual_install", "bool"),
+    ("is_stop", "bool"),
+    ("is_uninstall", "bool"),
+    ("is_beta", "bool"),
+    ("is_docker", "bool"),
+    ("min_size", "bigint"),
+    ("service_url", "text"),
+    ("source", "text"),
+    ("source_id", "text"),
+    ("status", "text"),
+    ("is_non_manual_stop", "bool"),
+    ("is_systemd_uint", "bool"),
+    ("disable_authorization_path", "bool"),
+    ("features", "text"),
+    ("micro_app", "bool"),
+    ("native_app", "bool"),
+    ("file_types", "text_array"),
+    ("is_power_off_stop", "int"),
+    ("i18n_matadata", "text"),
+    ("disabled_reason", "int"),
+    ("disabled_at", "bigint"),
+]
+
+APP_READONLY_COLUMNS = {
+    "version_id",
+    "install_type",
+    "path",
+    "install_volume_id",
+    "data_share_volume_id",
+    "data_volume_id",
+    "is_docker",
+    "source_id",
+    "status",
+    "disabled_reason",
+    "disabled_at",
+}
+
+SERVICE_COLUMNS = [
+    ("service_name", "text"),
+    ("title", "text"),
+    ("desc", "text"),
+    ("icon", "text"),
+    ("type", "text"),
+    ("url", "text"),
+    ("default_url", "text"),
+    ("is_admin", "bool"),
+    ("control", "text"),
+    ("full_url", "text"),
+    ("no_display", "bool"),
+    ("gateway_socket", "text"),
+    ("gateway_prefix", "text"),
+    ("file_types", "text"),
+    ("i18n_matadata", "text"),
+]
+
+ENV_COLUMNS = [("k", "text"), ("v", "text")]
+
+
+@contextmanager
+def request_context(method, query="", headers=None, body=b"", handler=None):
+    previous = getattr(REQUEST_CONTEXT, "value", None)
+    REQUEST_CONTEXT.value = {
+        "method": (method or "GET").upper(),
+        "query": query or "",
+        "headers": headers or {},
+        "body": body or b"",
+        "handler": handler,
+    }
+    try:
+        yield
+    finally:
+        if previous is None:
+            if hasattr(REQUEST_CONTEXT, "value"):
+                del REQUEST_CONTEXT.value
+        else:
+            REQUEST_CONTEXT.value = previous
+
+
+def current_request():
+    return getattr(REQUEST_CONTEXT, "value", None)
+
+
+class ThreadingUnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+    def __init__(self, socket_path, handler_cls, *, base_path, www_root):
+        self.server_name = APP_NAME
+        self.server_port = 0
+        self.base_path = normalize_base_path(base_path)
+        self.www_root = Path(www_root)
+        super().__init__(socket_path, handler_cls)
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def do_GET(self):
+        self.route()
+
+    def do_HEAD(self):
+        self.route()
+
+    def do_POST(self):
+        self.route()
+
+    def do_PUT(self):
+        self.route()
+
+    def do_DELETE(self):
+        self.route()
+
+    def log_message(self, fmt, *args):
+        sys.stdout.write(
+            "%s - - [%s] %s\n"
+            % (self.client_address, self.log_date_time_string(), fmt % args)
+        )
+        sys.stdout.flush()
+
+    def route(self):
+        parsed = urlsplit(self.path)
+        if parsed.path == self.server.base_path:
+            location = self.server.base_path + "/"
+            if parsed.query:
+                location += "?" + parsed.query
+            self.send_response(HTTPStatus.MOVED_PERMANENTLY)
+            self.send_header("Location", location)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        path = strip_base_path(parsed.path, self.server.base_path)
+        if path.startswith("/api"):
+            self.serve_api(parsed.query)
+            return
+        self.serve_static(path)
+
+    def serve_static(self, path):
+        rel_path = unquote(path or "/")
+        if rel_path in ("", "/"):
+            rel_path = "/index.html"
+        target = (self.server.www_root / rel_path.lstrip("/")).resolve()
+        root = self.server.www_root.resolve()
+        if root != target and root not in target.parents:
+            self.send_error(HTTPStatus.BAD_REQUEST, "Bad request")
+            return
+        if not target.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+            return
+        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        if content_type.startswith("text/") or content_type in {
+            "application/javascript",
+            "application/json",
+        }:
+            content_type = f"{content_type}; charset=utf-8"
+        size = target.stat().st_size
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(size))
+        self.send_header(
+            "Cache-Control",
+            "no-store" if target.name == "index.html" else "public, max-age=60",
+        )
+        self.end_headers()
+        if self.command != "HEAD":
+            with target.open("rb") as handle:
+                while True:
+                    chunk = handle.read(1024 * 256)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+
+    def serve_api(self, query):
+        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length) if length else b""
+        headers = {key: value for key, value in self.headers.items()}
+        with request_context(
+            self.command, query=query, headers=headers, body=body, handler=self
+        ):
+            try:
+                if self.command == "GET" and api_query_action(query) == "icon":
+                    serve_app_icon()
+                    return
+                dispatch()
+            except Exception as exc:
+                json_response({"ok": False, "message": str(exc)}, 500)
+
+
+def normalize_base_path(path):
+    if not path:
+        return "/"
+    normalized = path.strip()
+    if not normalized.startswith("/"):
+        normalized = "/" + normalized
+    return normalized.rstrip("/") or "/"
+
+
+def strip_base_path(path, base_path):
+    normalized = path or "/"
+    if base_path != "/" and normalized.startswith(base_path):
+        normalized = normalized[len(base_path) :] or "/"
+    return normalized
+
+
+def normalize_status(status):
+    if isinstance(status, HTTPStatus):
+        return status.value, f"{status.value} {status.phrase}"
+    if isinstance(status, int):
+        try:
+            phrase = HTTPStatus(status).phrase
+        except Exception:
+            phrase = "OK"
+        return status, f"{status} {phrase}"
+    text = str(status or "200 OK").strip()
+    first, _, rest = text.partition(" ")
+    if first.isdigit():
+        return int(first), text
+    return 200, "200 OK"
+
+
+def json_response(payload, status=200):
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    code, _status_text = normalize_status(status)
+    request = current_request()
+    handler = request.get("handler") if request else None
+    if handler is not None:
+        handler.send_response(code)
+        handler.send_header("Content-Type", "application/json; charset=utf-8")
+        handler.send_header("Content-Length", str(len(body)))
+        handler.end_headers()
+        if handler.command != "HEAD":
+            handler.wfile.write(body)
+        return
+    sys.stdout.write("Content-Type: application/json; charset=utf-8\r\n\r\n")
+    sys.stdout.flush()
+    sys.stdout.buffer.write(body)
+
+
+def request_body():
+    request = current_request()
+    if request:
+        method = request.get("method", "GET").upper()
+        body = request.get("body", b"") or b""
+        query_string = request.get("query", "") or ""
+        if method in {"POST", "PUT", "PATCH"}:
+            raw = body.decode("utf-8", "replace") if body else ""
+            content_type = ""
+            for key, value in request.get("headers", {}).items():
+                if key.lower() == "content-type":
+                    content_type = value
+                    break
+            if "application/json" in content_type:
+                return json.loads(raw or "{}")
+            parsed = urllib.parse.parse_qs(raw, keep_blank_values=True)
+            return {key: values[-1] for key, values in parsed.items()}
+        parsed = urllib.parse.parse_qs(query_string, keep_blank_values=True)
+        return {key: values[-1] for key, values in parsed.items()}
+    return {}
+
+
+def api_query_action(query):
+    parsed = urllib.parse.parse_qs(query or "", keep_blank_values=True)
+    return (parsed.get("action") or [""])[-1]
+
+
+def query_value(name, default=""):
+    request = current_request()
+    parsed = urllib.parse.parse_qs(
+        (request or {}).get("query", "") or "", keep_blank_values=True
+    )
+    return (parsed.get(name) or [default])[-1]
+
+
+def send_binary_response(data, content_type, status=200):
+    request = current_request()
+    handler = request.get("handler") if request else None
+    if handler is None:
+        return
+    code, _status_text = normalize_status(status)
+    handler.send_response(code)
+    handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(len(data)))
+    handler.send_header("Cache-Control", "public, max-age=60")
+    handler.end_headers()
+    if handler.command != "HEAD":
+        handler.wfile.write(data)
+
+
+def run_sql(sql):
+    proc = subprocess.run(
+        ["psql", "-U", DB_USER, "-d", DB_NAME, "-X", "-v", "ON_ERROR_STOP=1", "-q", "-t", "-A", "-c", sql],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "psql failed").strip()
+        raise RuntimeError(detail)
+    return proc.stdout.strip()
+
+
+def sql_quote(value):
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def quote_ident(name):
+    return '"' + str(name).replace('"', '""') + '"'
+
+
+def nullable_text(value):
+    if value is None:
+        return "NULL"
+    return sql_quote(value)
+
+
+def bool_sql(value):
+    if isinstance(value, bool):
+        return "TRUE" if value else "FALSE"
+    text = str(value).strip().lower()
+    return "TRUE" if text in {"1", "t", "true", "yes", "on"} else "FALSE"
+
+
+def int_sql(value, default="NULL"):
+    if value in (None, ""):
+        return default
+    return str(int(value))
+
+
+def text_array_sql(value):
+    if value in (None, ""):
+        return "NULL"
+    text = str(value).strip()
+    if not (text.startswith("{") and text.endswith("}")):
+        try:
+            items = json.loads(text)
+            if isinstance(items, list):
+                text = "{" + ",".join(str(item).replace('"', '\\"') for item in items) + "}"
+        except Exception:
+            text = "{}"
+    return f"{sql_quote(text)}::text[]"
+
+
+def value_sql(value, kind):
+    if kind == "bool":
+        return bool_sql(value)
+    if kind in {"int", "bigint"}:
+        return int_sql(value)
+    if kind == "text_array":
+        return text_array_sql(value)
+    return nullable_text(value)
+
+
+def parse_json_output(text, fallback):
+    if not text:
+        return fallback
+    try:
+        return json.loads(text)
+    except Exception as exc:
+        raise RuntimeError(f"database returned invalid JSON: {exc}")
+
+
+def app_icon_path(app_id):
+    app_id = int(app_id)
+    path = run_sql(f"SELECT path FROM app WHERE id={app_id}")
+    if not path:
+        return None
+    return Path(path) / "ICON.PNG"
+
+
+def privilege_path_for_app(app):
+    path = (app or {}).get("path")
+    if not path:
+        return None
+    return Path(str(path)) / "config" / "privilege"
+
+
+def privilege_path_for_app_id(app_id):
+    path = run_sql(f"SELECT path FROM app WHERE id={int(app_id)}")
+    if not path:
+        return None
+    return Path(path) / "config" / "privilege"
+
+
+def read_run_as(app):
+    target = privilege_path_for_app(app)
+    if not target or not target.is_file():
+        return "root"
+    try:
+        data = json.loads(target.read_text(encoding="utf-8", errors="replace") or "{}")
+    except Exception:
+        return "root"
+    run_as = ((data.get("defaults") or {}).get("run-as") or "root")
+    return "package" if run_as == "package" else "root"
+
+
+def write_run_as(app_id, run_as):
+    target = privilege_path_for_app_id(app_id)
+    if not target:
+        raise RuntimeError("missing app path for privilege")
+    try:
+        data = json.loads(target.read_text(encoding="utf-8") or "{}") if target.is_file() else {}
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    defaults = data.get("defaults")
+    if not isinstance(defaults, dict):
+        defaults = {}
+        data["defaults"] = defaults
+    defaults["run-as"] = "package" if run_as == "package" else "root"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def header_value(headers, name):
+    lowered = name.lower()
+    for key, value in (headers or {}).items():
+        if key.lower() == lowered:
+            return value
+    return ""
+
+
+def current_auth_token():
+    request = current_request() or {}
+    headers = request.get("headers") or {}
+    auth = header_value(headers, "Authorization") or os.environ.get("Authorization", "")
+    if isinstance(auth, str) and auth.lower().startswith("trim "):
+        return auth.split(None, 1)[1].strip()
+
+    cookie = header_value(headers, "Cookie") or os.environ.get("HTTP_COOKIE", "")
+    for part in str(cookie or "").split(";"):
+        key, _, value = part.strip().partition("=")
+        if key.lower() == "fnos-token" or "fnos-token" in key.lower():
+            return urllib.parse.unquote(value)
+    return ""
+
+
+def decode_chunked(data):
+    output = bytearray()
+    index = 0
+    while index < len(data):
+        line_end = data.find(b"\r\n", index)
+        if line_end < 0:
+            break
+        size_text = data[index:line_end].split(b";", 1)[0].strip()
+        try:
+            size = int(size_text, 16)
+        except ValueError:
+            return data
+        index = line_end + 2
+        if size == 0:
+            break
+        output.extend(data[index:index + size])
+        index += size + 2
+    return bytes(output)
+
+
+def app_center_socket_request(method, path, payload=None, timeout=20):
+    if not os.path.exists(APP_CENTER_SOCKET):
+        raise RuntimeError(f"socket not found: {APP_CENTER_SOCKET}")
+    token = current_auth_token()
+    if not token:
+        raise RuntimeError("app-center token not found")
+
+    body = b""
+    headers = [
+        f"{method} {path} HTTP/1.1",
+        "Host: system",
+        f"Authorization: trim {token}",
+        "Accept: application/json",
+        "Connection: close",
+    ]
+    if payload is not None:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        headers.extend(["Content-Type: application/json", f"Content-Length: {len(body)}"])
+
+    request = ("\r\n".join(headers) + "\r\n\r\n").encode("utf-8") + body
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+        client.settimeout(timeout)
+        client.connect(APP_CENTER_SOCKET)
+        client.sendall(request)
+        chunks = []
+        while True:
+            chunk = client.recv(65536)
+            if not chunk:
+                break
+            chunks.append(chunk)
+
+    raw = b"".join(chunks)
+    header, _, response_body = raw.partition(b"\r\n\r\n")
+    header_text = header.decode("iso-8859-1", "replace")
+    status_line = header.splitlines()[0].decode("iso-8859-1", "replace") if header else ""
+    status_code = int(status_line.split()[1]) if len(status_line.split()) > 1 else 0
+    if "transfer-encoding: chunked" in header_text.lower():
+        response_body = decode_chunked(response_body)
+    text = response_body.decode("utf-8", "replace")
+    if status_code >= 400:
+        raise RuntimeError(f"app-center HTTP {status_code}: {text[:200]}")
+    return text
+
+
+def app_status_and_name(app_id):
+    sql = (
+        "SELECT COALESCE(row_to_json(t)::text, '{}') "
+        f"FROM (SELECT app_name, status FROM app WHERE id={int(app_id)}) t"
+    )
+    try:
+        row = json.loads(run_sql(sql) or "{}")
+    except Exception:
+        row = {}
+    return str(row.get("app_name") or ""), str(row.get("status") or "")
+
+
+def restart_action(app_name, action):
+    appcenter_path = shutil.which("appcenter-cli")
+    if appcenter_path:
+        try:
+            proc = subprocess.run(
+                [appcenter_path, action, app_name],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=45,
+                check=False,
+            )
+            if proc.returncode == 0:
+                return f"info: {action} {app_name} via appcenter-cli"
+            detail = (proc.stderr or proc.stdout or "").strip()
+            fallback_reason = f"appcenter-cli rc={proc.returncode}: {detail}"
+        except Exception as error:
+            fallback_reason = str(error)
+    else:
+        fallback_reason = "appcenter-cli not found"
+
+    app_center_socket_request(
+        "POST",
+        f"/app-center/v1/app/{action}?appName={urllib.parse.quote(app_name)}",
+    )
+    return f"info: {action} {app_name} via socket fallback ({fallback_reason})"
+
+
+def restart_app_after_save(app_id):
+    app_name, status = app_status_and_name(app_id)
+    if not app_name:
+        return ["warning: app row not found; restart skipped"]
+    if app_name == APP_NAME:
+        return [f"info: restart skipped for {APP_NAME} itself"]
+    if status.strip().lower() != "running":
+        return [f"info: {app_name} status is {status or 'unknown'}; restart skipped"]
+    messages = []
+    for action in ("stop", "start"):
+        try:
+            messages.append(restart_action(app_name, action))
+        except Exception as error:
+            messages.append(f"warning: {action} {app_name} failed: {error}")
+            if action == "stop":
+                break
+    return messages
+
+
+def serve_app_icon():
+    app_id = query_value("id")
+    if not app_id:
+        json_response({"ok": False, "message": "missing app id"}, 400)
+        return
+    icon_path = app_icon_path(app_id)
+    if not icon_path or not icon_path.is_file():
+        json_response({"ok": False, "message": "icon not found"}, 404)
+        return
+    content_type = mimetypes.guess_type(str(icon_path))[0] or "image/png"
+    send_binary_response(icon_path.read_bytes(), content_type)
+
+
+def list_data():
+    apps_sql = """
+SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.id), '[]'::json)
+FROM (
+  SELECT id, app_name, name, version, version_id, tags, maintainer, distributor,
+         download_count, install_type, path, install_volume_id, data_share_volume_id,
+         data_volume_id, manual_install, is_stop, is_uninstall, is_beta, is_docker,
+         min_size, service_url, source, source_id, status, is_non_manual_stop,
+         is_systemd_uint, disable_authorization_path, features, micro_app, native_app,
+         COALESCE(file_types::text, '') AS file_types, is_power_off_stop,
+         i18n_matadata, disabled_reason, disabled_at, created_at, updated_at
+  FROM app
+) t
+"""
+    services_sql = """
+SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.app_id, t.id), '[]'::json)
+FROM (
+  SELECT id, app_id, service_name, title, "desc", icon, type, url, default_url,
+         is_admin, control, full_url, no_display, gateway_socket, gateway_prefix,
+         file_types, i18n_matadata, created_at, updated_at
+  FROM app_service
+) t
+"""
+    env_sql = """
+SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.app_id, t.id), '[]'::json)
+FROM (
+  SELECT id, app_id, k, v
+  FROM app_env
+) t
+"""
+    apps = parse_json_output(run_sql(apps_sql), [])
+    return {
+        "apps": apps,
+        "services": parse_json_output(run_sql(services_sql), []),
+        "env": parse_json_output(run_sql(env_sql), []),
+        "runAs": {str(app.get("id")): read_run_as(app) for app in apps},
+    }
+
+
+def column_map(columns):
+    return {name: kind for name, kind in columns}
+
+
+def update_app(payload):
+    app = payload.get("app")
+    if not isinstance(app, dict) or not app.get("id"):
+        raise RuntimeError("missing app")
+    allowed = {
+        name: kind
+        for name, kind in column_map(APP_COLUMNS).items()
+        if name not in APP_READONLY_COLUMNS
+    }
+    sets = []
+    for name, value in app.items():
+        if name in allowed:
+            sets.append(f"{quote_ident(name)}={value_sql(value, allowed[name])}")
+    if sets:
+        sets.append("updated_at=now()")
+        run_sql(f"UPDATE app SET {', '.join(sets)} WHERE id={int(app['id'])}")
+
+
+def save_child(table, columns, item, app_id):
+    allowed = column_map(columns)
+    values = {key: item.get(key) for key in allowed if key in item}
+    if item.get("_delete") and item.get("id"):
+        run_sql(f"DELETE FROM {table} WHERE id={int(item['id'])} AND app_id={int(app_id)}")
+        return
+    if item.get("id"):
+        sets = [
+            f"{quote_ident(name)}={value_sql(value, allowed[name])}"
+            for name, value in values.items()
+        ]
+        if table == "app_service":
+            sets.append("updated_at=now()")
+        if sets:
+            run_sql(
+                f"UPDATE {table} SET {', '.join(sets)} "
+                f"WHERE id={int(item['id'])} AND app_id={int(app_id)}"
+            )
+        return
+    if not values:
+        return
+    names = ["app_id"] + list(values.keys())
+    sql_values = [str(int(app_id))] + [
+        value_sql(value, allowed[name]) for name, value in values.items()
+    ]
+    if table == "app_service":
+        names.extend(["created_at", "updated_at"])
+        sql_values.extend(["now()", "now()"])
+    sql_names = ", ".join(quote_ident(name) for name in names)
+    run_sql(f"INSERT INTO {table} ({sql_names}) VALUES ({', '.join(sql_values)})")
+
+
+def save_data(payload):
+    app = payload.get("app")
+    if not isinstance(app, dict) or not app.get("id"):
+        raise RuntimeError("missing app")
+    app_id = int(app["id"])
+    update_app(payload)
+    if "runAs" in payload:
+        write_run_as(app_id, payload.get("runAs"))
+    for service in payload.get("services") or []:
+        if isinstance(service, dict):
+            save_child("app_service", SERVICE_COLUMNS, service, app_id)
+    for env in payload.get("env") or []:
+        if isinstance(env, dict):
+            save_child("app_env", ENV_COLUMNS, env, app_id)
+    restart_info = restart_app_after_save(app_id) if payload.get("restart") else []
+    data = list_data()
+    data["restartInfo"] = restart_info
+    return data
+
+
+def dispatch():
+    payload = request_body()
+    action = payload.get("action", "list")
+    if action == "list":
+        json_response({"ok": True, **list_data()})
+    elif action == "icon":
+        serve_app_icon()
+    elif action == "save":
+        json_response({"ok": True, **save_data(payload)})
+    else:
+        json_response({"ok": False, "message": "unsupported action"}, 400)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="fn-appsettings Unix socket server")
+    parser.add_argument("--unix-socket", required=True)
+    parser.add_argument("--base-path", default="/app/fn-appsettings")
+    parser.add_argument("--www-root", required=True)
+    args = parser.parse_args()
+
+    if os.path.exists(args.unix_socket):
+        os.unlink(args.unix_socket)
+
+    server = ThreadingUnixHTTPServer(
+        args.unix_socket,
+        Handler,
+        base_path=args.base_path,
+        www_root=args.www_root,
+    )
+
+    def shutdown(_signum, _frame):
+        server.server_close()
+        if os.path.exists(args.unix_socket):
+            os.unlink(args.unix_socket)
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
+
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+        if os.path.exists(args.unix_socket):
+            os.unlink(args.unix_socket)
+
+
+if __name__ == "__main__":
+    main()
