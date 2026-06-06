@@ -1,0 +1,6 @@
+[common]
+display_name="高级设置"
+desc="管理启动、电源、SSH、CPU、DNS、网络、代理 设置。"
+
+[entry]
+title="高级设置"

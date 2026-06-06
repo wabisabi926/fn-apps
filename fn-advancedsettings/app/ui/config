@@ -1,0 +1,17 @@
+{
+  ".url": {
+    "fn-advancedsettings.Application": {
+      "title": "${entry.title}",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "url": "/app/fn-advancedsettings",
+      "gatewaySocket": "fn-advancedsettings.sock",
+      "gatewayPrefix": "/app/fn-advancedsettings",
+      "allUsers": false,
+      "control": {
+        "accessPerm": "readonly",
+        "fullUrlPerm": "readonly"
+      }
+    }
+  }
+}

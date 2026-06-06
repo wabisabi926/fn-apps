@@ -1,0 +1,6 @@
+[common]
+display_name="Advanced Settings"
+desc="Manage boot, power, SSH, CPU, DNS, network, proxy settings."
+
+[entry]
+title="Advanced Settings"

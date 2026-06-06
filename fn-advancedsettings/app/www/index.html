@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>高级设置</title>
+  <link rel="stylesheet" href="/app/fn-advancedsettings/style.css">
+</head>
+
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <nav id="navList" class="nav-list" aria-label="settings"></nav>
+      <button id="aboutBtn" class="side-footer" type="button">
+        <span>i</span>
+        <strong data-i18n="about">关于</strong>
+      </button>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <h2 id="pageTitle">启动设置</h2>
+        <div class="topbar-actions">
+          <button id="refreshBtn" class="ghost-btn" type="button" data-i18n="refresh">刷新</button>
+          <button id="saveBtn" class="primary-btn" type="button" data-i18n="save">保存</button>
+        </div>
+      </header>
+
+      <div id="emptyState" class="empty" data-i18n="loading">正在加载...</div>
+      <form id="editor" class="editor hidden">
+        <section id="bootPanel" class="panel" data-panel="boot">
+          <div class="section-head">
+            <h3 data-i18n="bootSettings">启动设置</h3>
+            <label class="check"><input id="bootApply" type="checkbox" checked><span data-i18n="applyGrub">更新 grub
+                配置</span></label>
+          </div>
+          <div class="grid" id="bootFields"></div>
+        </section>
+
+        <section id="powerPanel" class="panel hidden" data-panel="power">
+          <div class="section-head">
+            <h3 data-i18n="powerSettings">电源设置</h3>
+            <label class="check"><input id="powerApply" type="checkbox" checked><span data-i18n="restartLogind">重启
+                logind 服务</span></label>
+          </div>
+          <div class="grid" id="powerFields"></div>
+        </section>
+
+        <section id="sshPanel" class="panel hidden" data-panel="ssh">
+          <div class="section-head">
+            <h3 data-i18n="sshSettings">SSH 设置</h3>
+            <label class="check"><input id="sshApply" type="checkbox" checked><span data-i18n="restartSsh">重启 SSH
+                服务</span></label>
+          </div>
+          <div class="grid" id="sshFields"></div>
+          <div class="section-head subsection-head">
+            <h3 data-i18n="rootPasswordBlock">root 密码</h3>
+          </div>
+          <div class="grid">
+            <label class="field"><span data-i18n="rootPassword">root 新密码</span><input id="rootPassword" type="password"
+                autocomplete="new-password"></label>
+            <label class="field"><span data-i18n="rootPasswordConfirm">确认 root 密码</span><input id="rootPasswordConfirm"
+                type="password" autocomplete="new-password"></label>
+          </div>
+        </section>
+
+        <section id="cpuPanel" class="panel hidden" data-panel="cpu">
+          <h3 data-i18n="cpuSettings">CPU 设置</h3>
+          <div class="grid" id="cpuFields"></div>
+          <div id="cpuList" class="data-list"></div>
+        </section>
+
+        <section id="dnsPanel" class="panel hidden" data-panel="dns">
+          <h3 data-i18n="dnsSettings">DNS 设置</h3>
+          <div class="grid">
+            <label class="field wide"><span>/etc/resolv.conf</span><textarea id="resolvContent"
+                spellcheck="false"></textarea></label>
+            <label class="field wide"><span>/etc/hosts</span><textarea id="hostsContent"
+                spellcheck="false"></textarea></label>
+          </div>
+        </section>
+
+        <section id="networkPanel" class="panel hidden" data-panel="network">
+          <h3 data-i18n="networkSettings">网络设置</h3>
+          <div id="networkList" class="data-list"></div>
+        </section>
+
+        <section id="proxyPanel" class="panel hidden" data-panel="proxy">
+          <h3 data-i18n="proxySettings">代理设置</h3>
+          <div class="grid" id="proxyFields"></div>
+        </section>
+
+        <section id="identityPanel" class="panel hidden" data-panel="identity">
+          <div class="section-head">
+            <h3 data-i18n="identitySettings">设备标识</h3>
+            <label class="check"><input id="identityApply" type="checkbox" checked><span
+                data-i18n="restartIdentity">重启系统信息服务</span></label>
+          </div>
+          <div class="grid" id="identityFields"></div>
+        </section>
+      </form>
+    </main>
+  </div>
+
+  <div id="aboutModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 data-i18n="about">关于</h2>
+        </div>
+        <button class="icon-btn" data-close type="button" aria-label="关闭" data-i18n-title="close">×</button>
+      </div>
+      <div class="about-body">
+        <div class="about-section">
+          <p class="about-declaration" data-i18n="aboutDeclaration">本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。</p>
+        </div>
+
+        <div class="about-section">
+          <h3 data-i18n="communitySupport">社区支持</h3>
+          <ul class="about-list">
+            <li>QQ 群：130359605 · <a href="https://qm.qq.com/q/xMUyJacSIw" target="_blank" rel="noopener noreferrer" data-i18n="join">点击加入</a></li>
+            <li>Github：<a href="https://github.com/RROrg/fn-apps" target="_blank" rel="noopener noreferrer">RROrg/fn-apps</a></li>
+          </ul>
+        </div>
+
+        <div class="about-section">
+          <h3 data-i18n="sponsorSupport">赞助支持</h3>
+          <img class="about-sponsor-image" src="https://raw.githubusercontent.com/wjz304/wjz304/master/my/buymeacoffee.png" alt="sponsoring">
+        </div>
+
+        <div class="about-copyright">
+          <a href="https://github.com/RROrg" target="_blank" rel="noopener noreferrer">RROrg</a>
+          <a href="https://github.com/wjz304" target="_blank" rel="noopener noreferrer">wjz304</a>
+          <span>© 2026 RROrg, Ing, Inc.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/app/fn-advancedsettings/app.js"></script>
+</body>
+
+</html>
