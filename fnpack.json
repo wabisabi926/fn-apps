@@ -1,33 +1,48 @@
 {
-  "fn-VirtualHereServer": {
-    "display_name": "VirtualHereServer",
+  "fn-advancedsettings": {
+    "display_name": "高级设置",
     "platform": "all",
-    "version": "4.8.6",
-    "desc": "VirtualHere USB 服务器支持通过网络远程访问 USB 设备。",
-    "icon": "https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fn-VirtualHereServer/ICON_256.PNG",
-    "distributor": "VirtualHere Pty. Ltd.",
-    "distributor_url": "https://www.virtualhere.com",
+    "version": "1.0.0",
+    "desc": "管理启动、电源、SSH、CPU、DNS、网络、代理 设置。",
+    "icon": "https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fn-advancedsettings/ICON_256.PNG",
+    "distributor": "RROrg",
+    "distributor_url": "https://github.com/RROrg/fn-apps",
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
-    "size": "3.082",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-VirtualHereServer_all_v4.8.6.fpk",
-    "install_type": "存储空间",
-    "changelog": "Initial release of fn-VirtualHereServer package."
+    "size": "0.291",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-advancedsettings_all_v1.0.0.fpk",
+    "install_type": "系统空间",
+    "changelog": "Initial release of fn-advancedsettings package."
   },
   "fn-appdownload": {
     "display_name": "应用坏心",
     "platform": "all",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "desc": "官方商店和第三方源应用下载",
     "icon": "https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fn-appdownload/ICON_256.PNG",
     "distributor": "RROrg",
     "distributor_url": "https://github.com/RROrg/fn-apps",
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
-    "size": "0.298",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-appdownload_all_v1.0.1.fpk",
+    "size": "0.301",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-appdownload_all_v1.0.2.fpk",
     "install_type": "存储空间",
     "changelog": "Initial release of fn-appdownload package."
+  },
+  "fn-appsettings": {
+    "display_name": "应用设置",
+    "platform": "all",
+    "version": "1.0.1",
+    "desc": "设置已安装应用的数据",
+    "icon": "https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fn-appsettings/ICON_256.PNG",
+    "distributor": "RROrg",
+    "distributor_url": "https://github.com/RROrg/fn-apps",
+    "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
+    "labels": "工具",
+    "size": "0.205",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-appsettings_all_v1.0.1.fpk",
+    "install_type": "系统空间",
+    "changelog": "Initial release of fn-appsettings package."
   },
   "fn-chromium": {
     "display_name": "chromium",
@@ -40,7 +55,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.046",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-chromium_all_v1.0.2.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-chromium_all_v1.0.2.fpk",
     "install_type": "存储空间",
     "changelog": "Initial release of fn-chromium package."
   },
@@ -55,7 +70,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.047",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-chromium-desktop_all_v1.0.0.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-chromium-desktop_all_v1.0.0.fpk",
     "install_type": "存储空间",
     "changelog": "Initial release of fn-chromium-desktop package."
   },
@@ -70,7 +85,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.016",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-codeserver_all_v1.0.6.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-codeserver_all_v1.0.6.fpk",
     "install_type": "存储空间",
     "changelog": "Initial release of fn-codeserver package."
   },
@@ -85,22 +100,22 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.179",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-fail2ban_all_v1.0.2.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-fail2ban_all_v1.0.2.fpk",
     "install_type": "系统空间",
     "changelog": "Initial release of fn-fail2ban package."
   },
   "fn-grafana-alloy": {
     "display_name": "Grafana Alloy",
     "platform": "all",
-    "version": "1.13.2",
+    "version": "1.16.2",
     "desc": "可观测性数据收集器，收集系统日志、应用日志发送到 Loki",
     "icon": "https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fn-grafana-alloy/ICON_256.PNG",
     "distributor": "RROrg",
     "distributor_url": "https://github.com/RROrg/fn-apps",
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
-    "size": "",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-grafana-alloy_all_v1.13.2.fpk",
+    "size": "197.418",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-grafana-alloy_all_v1.16.2.fpk",
     "install_type": "存储空间",
     "changelog": "Initial release of fn-grafana-alloy package."
   },
@@ -115,7 +130,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.048",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-kodi_all_v1.0.6.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-kodi_all_v1.0.6.fpk",
     "install_type": "存储空间",
     "changelog": "Initial release of fn-kodi package."
   },
@@ -130,7 +145,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.205",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-linux-station_all_v1.0.1.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-linux-station_all_v1.0.1.fpk",
     "install_type": "存储空间",
     "changelog": "Initial release of fn-linux-station package."
   },
@@ -145,7 +160,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.038",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-monitor_all_v1.0.4.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-monitor_all_v1.0.4.fpk",
     "install_type": "系统空间",
     "changelog": "Initial release of fn-monitor package."
   },
@@ -160,7 +175,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.057",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-open-vm-tools_all_v1.0.8.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-open-vm-tools_all_v1.0.8.fpk",
     "install_type": "系统空间",
     "changelog": "Initial release of fn-open-vm-tools package."
   },
@@ -175,7 +190,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.054",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-qemu-ga_all_v1.0.8.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-qemu-ga_all_v1.0.8.fpk",
     "install_type": "系统空间",
     "changelog": "Initial release of fn-qemu-ga package."
   },
@@ -190,7 +205,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.206",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-scheduler_all_v1.2.5.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-scheduler_all_v1.2.5.fpk",
     "install_type": "系统空间",
     "changelog": "Initial release of fn-scheduler package."
   },
@@ -205,7 +220,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "15.110",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-scrutiny-collector_all_v1.49.2.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-scrutiny-collector_all_v1.49.2.fpk",
     "install_type": "存储空间",
     "changelog": "Initial release of fn-scrutiny-collector package."
   },
@@ -220,7 +235,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.037",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-sshd-config_all_v1.0.6.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-sshd-config_all_v1.0.6.fpk",
     "install_type": "系统空间",
     "changelog": "Initial release of fn-sshd-config package."
   },
@@ -235,7 +250,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "6.775",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-terminal_all_v1.0.11.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-terminal_all_v1.0.11.fpk",
     "install_type": "存储空间",
     "changelog": "Initial release of fn-terminal package."
   },
@@ -243,14 +258,14 @@
     "display_name": "虚拟机m",
     "platform": "all",
     "version": "1.0.0",
-    "desc": "强制开启虚拟机在手机端的 导入/创建 及 VNC访问 功能 (虚拟机升级/重装后也需要重新安装该软件)。",
+    "desc": "强制开启虚拟机在手机端的 \"导入/创建\" 及 \"VNC访问\" 功能 (虚拟机升级/重装后也需要重新安装该软件)。",
     "icon": "https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fn-trim.vm/ICON_256.PNG",
     "distributor": "RROrg",
     "distributor_url": "https://github.com/RROrg/fn-apps",
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.036",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-trim.vm_all_v1.0.0.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-trim.vm_all_v1.0.0.fpk",
     "install_type": "存储空间",
     "changelog": "Initial release of fn-trim.vm package."
   },
@@ -265,7 +280,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.039",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-vfnOS_all_v1.0.1.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-vfnOS_all_v1.0.1.fpk",
     "install_type": "存储空间",
     "changelog": "Initial release of fn-vfnOS package."
   },
@@ -280,9 +295,24 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.272",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-vgmng_all_v1.0.1.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-vgmng_all_v1.0.1.fpk",
     "install_type": "系统空间",
     "changelog": "Initial release of fn-vgmng package."
+  },
+  "fn-VirtualHereServer": {
+    "display_name": "VirtualHereServer",
+    "platform": "all",
+    "version": "4.8.6",
+    "desc": "VirtualHere USB 服务器支持通过网络远程访问 USB 设备。",
+    "icon": "https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fn-VirtualHereServer/ICON_256.PNG",
+    "distributor": "VirtualHere Pty. Ltd.",
+    "distributor_url": "https://www.virtualhere.com",
+    "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
+    "labels": "工具",
+    "size": "3.082",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-VirtualHereServer_all_v4.8.6.fpk",
+    "install_type": "存储空间",
+    "changelog": "Initial release of fn-VirtualHereServer package."
   },
   "fn-wifi-hotspot": {
     "display_name": "无线热点",
@@ -295,7 +325,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.108",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-wifi-hotspot_all_v1.1.3.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-wifi-hotspot_all_v1.1.3.fpk",
     "install_type": "系统空间",
     "changelog": "Initial release of fn-wifi-hotspot package."
   },
@@ -310,7 +340,7 @@
     "bug_report_url": "https://github.com/RROrg/fn-apps/issues",
     "labels": "工具",
     "size": "0.071",
-    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.03-1016/fn-zerotier_all_v1.0.3.fpk",
+    "download_url": "https://github.com/RROrg/fn-apps/releases/download/2026.06.07-0140/fn-zerotier_all_v1.0.3.fpk",
     "install_type": "系统空间",
     "changelog": "Initial release of fn-zerotier package."
   }
