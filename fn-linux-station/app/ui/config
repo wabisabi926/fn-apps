@@ -1,7 +1,7 @@
 {
   ".url": {
     "fn-linux-station.single": {
-      "title": "图形桌面",
+      "title": "${entry.title1}",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
       "protocol": "",
@@ -14,7 +14,7 @@
       }
     },
     "fn-linux-station.mirror": {
-      "title": "桌面镜像",
+      "title": "${entry.title2}",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
       "protocol": "",

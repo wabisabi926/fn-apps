@@ -1,7 +1,7 @@
 appname               = fn-vfnOS
-version               = 1.0.1
-display_name          = fn-vfnOS
-desc                  = 在 fnOS 系统中创建异架构的 fnOS 虚拟机（x86_64 fnOS 下则创建 aarch64 的 fnOS 虚拟机, aarch64 fnOS 下则创建 x86_64 的 fnOS 虚拟机）。
+version               = 1.0.2
+display_name          = "${common.display_name}"
+desc                  = "${common.desc}"
 platform              = all
 source                = thirdparty
 maintainer            = Ing

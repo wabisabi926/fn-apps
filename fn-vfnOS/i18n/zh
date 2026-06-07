@@ -1,0 +1,39 @@
+[common]
+display_name="vfnOS"
+desc="在 fnOS 系统中创建异架构的 fnOS 虚拟机（x86_64 fnOS 下则创建 aarch64 的 fnOS 虚拟机, aarch64 fnOS 下则创建 x86_64 的 fnOS 虚拟机）。"
+
+[entry]
+title="vfnOS"
+
+[wizard]
+config_stepTitle="配置向导"
+config_item1_helpText="您即将修改 vfnOS" 
+config_item1_label="是否开机自启"
+config_item1_options1="是"
+config_item1_options2="否"
+config_item1_rules="请选择是否开机自启"
+
+install_stepTitle="安装向导"
+install_item1_helpText="您即将安装 vfnOS" 
+install_item2_helpText="1. 安装后请在 “虚拟机” 中启动/停止 vfnOS 虚拟机。"
+install_item1_label="CPU 核心数"
+install_item1_required="请输入 CPU 核心数"
+install_item1_rules="CPU 核心数必须在 1 到 16 之间"
+install_item2_label="内存大小（MB）"
+install_item2_required="请输入内存大小（MB）"
+install_item2_rules="内存大小（MB）必须在 2048 到 32768 之间"
+install_item3_label="磁盘大小（GB）"
+install_item3_required="请输入磁盘大小（GB）"
+install_item3_rules="磁盘大小（GB）必须在 8 到 256 之间"
+install_item4_label="是否开机自启"
+install_item4_options1="是"
+install_item4_options2="否"
+install_item4_rules="请选择是否开机自启"
+
+uninstall_stepTitle="卸载向导"
+uninstall_item1_helpText="您即将卸载此应用。请选择如何处理应用数据："
+uninstall_item1_label="数据保留选项"
+uninstall_item1_options1="保留数据 - 重安装时可恢复！（推荐）"
+uninstall_item1_options2="删除数据 - 此操作不可恢复！"
+uninstall_item1_rules="请选择数据保留选项"
+  

@@ -1,0 +1,34 @@
+[common]
+display_name="code-server"
+desc="code-server is a web-based version of Microsoft VS Code."
+
+[entry]
+title="code-server"
+
+[wizard]
+config_stepTitle="Configuration Wizard"
+config_item1_helpText="You are about to modify codeserver" 
+config_item2_helpText="1. If the terminal is unavailable after installation, please set the permission to “run-as: root”."
+config_item1_label="Password"
+config_item1_required="Please enter a password"
+config_item1_rules="Password must be at least 4 characters long"
+config_item2_label="Port"
+config_item2_required="Please enter a port number"
+config_item2_rules="Port number must be between 0-65535"
+
+install_stepTitle="Install Wizard"
+install_item1_helpText="You are about to install codeserver" 
+install_item2_helpText="1. If the terminal is unavailable after installation, please set the permission to “run-as: root”." 
+install_item1_label="Password"
+install_item1_required="Please enter a password"
+install_item1_rules="Password must be at least 4 characters long"
+install_item2_label="Port"
+install_item2_required="Please enter a port number"
+install_item2_rules="Port number must be between 0-65535"
+
+uninstall_stepTitle="Uninstall Wizard"
+uninstall_item1_helpText="You are about to uninstall this application. Please select how to handle application data:"
+uninstall_item1_label="Data retention options"
+uninstall_item1_options1="Retain data - can be restored during reinstallation! (Recommended)"
+uninstall_item1_options2="Delete data - this operation is irreversible!"
+uninstall_item1_rules="Please select data retention options"

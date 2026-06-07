@@ -1,0 +1,38 @@
+[common]
+display_name="vfnOS"
+desc="Create cross-architecture fnOS virtual machines on fnOS (x86_64 fnOS creates aarch64 fnOS VMs, aarch64 fnOS creates x86_64 fnOS VMs)."
+
+[entry]
+title="vfnOS"
+
+[wizard]
+config_stepTitle="Configuration Wizard"
+config_item1_helpText="You are about to modify vfnOS" 
+config_item1_label="Start on boot"
+config_item1_options1="Yes"
+config_item1_options2="No"
+config_item1_rules="Please select whether to start on boot"
+
+install_stepTitle="Install Wizard"
+install_item1_helpText="You are about to install vfnOS" 
+install_item2_helpText="1. After installation, please start/stop the vfnOS virtual machine in 'Virtual Machine'."
+install_item1_label="CPU cores"
+install_item1_required="Please enter the number of CPU cores"
+install_item1_rules="The number of CPU cores must be between 1 and 16"
+install_item2_label="Memory size (MB)"
+install_item2_required="Please enter the memory size (MB)"
+install_item2_rules="The memory size (MB) must be between 2048 and 32768"
+install_item3_label="Disk size (GB)"
+install_item3_required="Please enter the disk size (GB)"
+install_item3_rules="The disk size (GB) must be between 8 and 256"
+install_item4_label="Start on boot"
+install_item4_options1="Yes"
+install_item4_options2="No"
+install_item4_rules="Please select whether to start on boot"
+
+uninstall_stepTitle="Uninstall Wizard"
+uninstall_item1_helpText="You are about to uninstall this application. Please select how to handle application data:"
+uninstall_item1_label="Data retention options"
+uninstall_item1_options1="Retain data - can be restored during reinstallation! (Recommended)"
+uninstall_item1_options2="Delete data - this operation is irreversible!"
+uninstall_item1_rules="Please select data retention options"

@@ -1,0 +1,6 @@
+[common]
+display_name="Virtual Machine m"
+desc="Force enable the 'Import/Create' and 'VNC Access' features for virtual machines on mobile devices (reinstallation required after VM upgrade/reinstallation)."
+
+[entry]
+title="Virtual Machine m"

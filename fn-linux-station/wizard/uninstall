@@ -1,10 +1,10 @@
 [
   {
-    "stepTitle": "卸载向导",
+    "stepTitle": "${wizard.uninstall_stepTitle}",
     "items": [
       {
         "type": "tips",
-        "helpText": "<strong>警告：</strong>由于 fnOS 系统软件安装/更行限制不能存在软连接，所以该应用卸载只能删除全部数据，删除后无法恢复！"
+        "helpText": "${wizard.uninstall_item0_helpText}"
       }
     ]
   }

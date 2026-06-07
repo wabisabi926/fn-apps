@@ -1,7 +1,7 @@
 {
     ".url": {
         "fn-codeserver.Application": {
-            "title": "codeserver",
+            "title": "${entry.title}",
             "icon": "images/icon_{0}.png",
             "type": "iframe",
             "port": "${wizard_port}",
