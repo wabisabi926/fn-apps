@@ -1,0 +1,6 @@
+[common]
+display_name="Wi-Fi Hotspot"
+desc="Wi-Fi hotspot creation tool that allows users to easily turn their computer into a Wi-Fi hotspot and share the network connection with other devices."
+
+[entry]
+title="Wi-Fi Hotspot"

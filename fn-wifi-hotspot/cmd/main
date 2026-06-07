@@ -2,32 +2,36 @@
 
 LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
-API_FILE="${TRIM_APPDEST}/www/api.cgi"
+SOCKET_PATH="${TRIM_APPDEST}/fn-wifi-hotspot.sock"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 
-# write the command to start your program here
-CMD=""
+CMD=(
+  "${PYTHON_BIN}"
+  "${TRIM_APPDEST}/server/hotspot.py"
+  --unix-socket "${SOCKET_PATH}"
+  --base-path "/app/fn-wifi-hotspot"
+  --www-root "${TRIM_APPDEST}/www"
+  --data-dir "${TRIM_PKGVAR}"
+)
 
 log_msg() {
-  echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >>${LOG_FILE}
+  mkdir -p "${TRIM_PKGVAR}"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >>"${LOG_FILE}"
 }
 
-restore_state() {
-  action="$1"
-  hotspot_state_file="${TRIM_APPDEST}/target/server/hotspot.state"
+check_process() {
+  local pid=$1
+  kill -0 "${pid}" 2>/dev/null
+}
 
-  if [ ! -f "${hotspot_state_file}" ]; then
-    return 0
+status() {
+  if [ -f "${PID_FILE}" ]; then
+    pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+    if check_process "${pid}"; then
+      return 0
+    fi
+    rm -f "${PID_FILE}" "${SOCKET_PATH}"
   fi
-
-  if ! grep -Eq '^(HOTSPOT_ENABLED=1|ENABLED='"'"'1'"'"')$' "${hotspot_state_file}" 2>/dev/null; then
-    return 0
-  fi
-
-  for _ in $(seq 1 5); do
-    env QUERY_STRING="action=${action}" REQUEST_METHOD=GET "${API_FILE}" | grep -q '"ok": true' && return 0
-    sleep 5
-  done
-
   return 1
 }
 
@@ -35,44 +39,48 @@ start_process() {
   if status; then
     return 0
   fi
-
+  mkdir -p "${TRIM_PKGVAR}"
+  rm -f "${SOCKET_PATH}"
   log_msg "Starting process ..."
-  restore_state start >${LOG_FILE} 2>&1 || true
-  touch "${PID_FILE}"
-  return 0
+  if command -v setsid >/dev/null 2>&1; then
+    setsid "${CMD[@]}" >>"${LOG_FILE}" 2>&1 &
+  else
+    nohup "${CMD[@]}" >>"${LOG_FILE}" 2>&1 &
+  fi
+  printf "%s" "$!" >"${PID_FILE}"
 }
 
 stop_process() {
   log_msg "Stopping process ..."
-  # restore_state stop >${LOG_FILE} 2>&1
-  rm -f "${PID_FILE}"
-  return 0
-}
-
-status() {
-  if [ -f "${PID_FILE}" ]; then
-    return 0
-  else
-    return 1
+  if [ -r "${PID_FILE}" ]; then
+    pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+    if check_process "${pid}"; then
+      kill -TERM "${pid}" >>"${LOG_FILE}" 2>&1 || true
+      count=0
+      while check_process "${pid}" && [ "${count}" -lt 30 ]; do
+        sleep 1
+        count=$((count + 1))
+      done
+      if check_process "${pid}"; then
+        kill -KILL "${pid}" >>"${LOG_FILE}" 2>&1 || true
+      fi
+    fi
   fi
+  rm -f "${PID_FILE}" "${SOCKET_PATH}"
 }
 
-case $1 in
+case "$1" in
   start)
-    # run start command. exit 0 if success, exit 1 if failed
     start_process
     ;;
   stop)
-    # run stop command. exit 0 if success, exit 1 if failed
     stop_process
     ;;
   status)
-    # check application status command. exit 0 if running, exit 3 if not running
     if status; then
       exit 0
-    else
-      exit 3
     fi
+    exit 3
     ;;
   *)
     exit 1

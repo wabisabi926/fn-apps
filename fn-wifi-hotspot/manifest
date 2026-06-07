@@ -1,7 +1,7 @@
 appname               = fn-wifi-hotspot
-version               = 1.1.3
-display_name          = 无线热点
-desc                  = 无线热点创建工具，允许用户轻松地将计算机变成一个 Wi-Fi 热点，分享网络连接给其他设备。
+version               = 1.1.4
+display_name          = "${common.display_name}"
+desc                  = "${common.desc}"
 platform              = all
 source                = thirdparty
 desktop_uidir         = ui

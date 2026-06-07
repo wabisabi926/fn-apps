@@ -1,1241 +1,467 @@
-const $ = (id) => document.getElementById(id);
+const API = "/app/fn-wifi-hotspot/api";
 
-const statusEl = $("status");
-const clientsEl = $("clients");
-const msgEl = $("msg");
-const toggleBtn = $("toggleHotspot");
-const toggleText = $("toggleText");
-const form = $("cfg");
-const ifaceEl = form.elements["iface"];
-const uplinkEl = form.elements["uplinkIface"];
-const passwordEl = form.elements["password"];
-const countryCodeEl = form.elements["countryCode"];
-const bandEl = form.elements["band"];
-const channelEl = form.elements["channel"];
-const channelWidthEl = form.elements["channelWidth"];
-const pwToggleBtn = $("pwToggle");
-const langSelectEl = $("langSelect");
-const themeSelectEl = $("themeSelect");
-
-let serverChannelMeta = { bg: {}, a: {} };
-const REQUEST_TIMEOUT_MS = 10000;
-
-let lastRunning = false;
-let lastInternetStatus = undefined;
-let noWifiNoticeShown = false;
+const state = {
+  language: "zh-CN",
+  theme: "dark",
+  config: null,
+  status: null,
+  channels: { bg: [], a: [] },
+  running: false,
+  loaded: false,
+  busy: false,
+  polling: false,
+};
 
 const I18N = {
-  zh: {
-    "title.tip": "提示",
-    "title.confirm": "确认",
-    "title.progress": "处理中",
-    "btn.ok": "确定",
-    "btn.cancel": "取消",
-    "btn.continue": "继续",
-    "btn.save": "保存",
-    "btn.kick": "下线",
-    "toggle.on": "热点：开启",
-    "toggle.off": "热点：关闭",
-    "toggle.suffix.net": "（有网）",
-    "toggle.suffix.nonnet": "（无网）",
-
-    "err.invalidJson": "响应不是有效 JSON",
-    "err.requestTimeout": "请求超时，请稍后重试",
-
-    "section.net": "网卡",
-    "section.config": "配置",
-    "section.wifi": "参数",
-    "section.clients": "客户端",
-    "label.uplink": "共享网卡",
-    "label.iface": "热点网卡",
-    "label.ssid": "SSID",
-    "label.password": "密码（>=8位）",
-    "label.ipCidr": "IP/CIDR",
-    "label.allowPorts": "放行端口（供客户端访问主机服务）",
-    "label.country": "国家码",
-    "label.band": "频段",
-    "label.channel": "信道",
-    "label.width": "带宽",
-    "opt.uplinkAuto": "自动（系统默认路由）",
-    "opt.ifaceAuto": "自动选择",
-    "opt.unavailable": "（不可用/未检测到）",
-
-    "placeholder.ipCidr": "192.168.12.1/24",
-    "placeholder.allowPorts": "80,443,5666,5667,67-68/udp",
-
-    "pw.show": "显示密码",
-    "pw.hide": "隐藏密码",
-
-    "aria.langSelect": "语言",
-    "aria.themeSelect": "主题",
-
-    "lang.zh": "中文",
-    "lang.en": "English",
-    "theme.system": "跟随系统",
-    "theme.light": "亮模式",
-    "theme.dark": "暗模式",
-
-    "clients.empty": "暂无客户端",
-    "clients.cols": ["主机名", "MAC", "IP", "信号", "在线", "流量", "操作"],
-    "kick.confirm": "确定要让客户端下线？\n{mac}{ip}",
-    "kick.title": "确认下线",
-    "kick.progress": "正在让客户端下线…",
-    "kick.done": "已下线",
-
-    "hotspot.confirmTitle": "确认开启热点",
-    "hotspot.confirmOk": "继续开启",
-    "hotspot.confirmCancel": "取消",
-    "hotspot.confirmMsg": "当前网卡不支持 STA+AP 并发，开启热点将断开当前 Wi‑Fi 连接{conPart}。是否继续？",
-
-    "progress.enable": "正在开启热点…",
-    "progress.disable": "正在关闭热点…",
-    "progress.save": "正在保存配置…",
-    "progress.restart": "正在重启热点…",
-
-    "msg.canceled": "已取消",
-    "msg.enabled": "已开启热点",
-    "msg.disabled": "已关闭热点",
-    "msg.saved": "已保存",
-    "msg.savedRestart": "已保存并重启热点",
-    "msg.no5g": "当前监管域下 5G 信道不可用，已切换到 2.4G",
-    "msg.noWifi": "未检测到 Wi‑Fi 网卡",
-    "msg.countryChangeFailed": "更改国家码失败：{err}",
-    "countryNames": {
-      "CN": "中国",
-      "US": "美国",
-      "JP": "日本",
-      "KR": "韩国",
-      "AU": "澳大利亚",
-      "CA": "加拿大",
-      "GB": "英国",
-      "DE": "德国",
-      "FR": "法国",
-      "IT": "意大利",
-      "ES": "西班牙",
-      "NL": "荷兰",
-      "BE": "比利时",
-      "CH": "瑞士",
-      "AT": "奥地利",
-      "SE": "瑞典",
-      "NO": "挪威",
-      "DK": "丹麦",
-      "FI": "芬兰",
-      "RU": "俄罗斯",
-      "IN": "印度",
-      "BR": "巴西",
-      "MX": "墨西哥",
-      "AR": "阿根廷",
-      "CL": "智利",
-      "CO": "哥伦比亚",
-      "PE": "秘鲁",
-      "VE": "委内瑞拉",
-      "ZA": "南非",
-      "EG": "埃及",
-      "NG": "尼日利亚",
-      "KE": "肯尼亚",
-      "MA": "摩洛哥",
-      "TN": "突尼斯",
-      "TR": "土耳其",
-      "SA": "沙特阿拉伯",
-      "AE": "阿联酋",
-      "IL": "以色列",
-      "TH": "泰国",
-      "MY": "马来西亚",
-      "SG": "新加坡",
-      "PH": "菲律宾",
-      "ID": "印尼",
-      "VN": "越南",
-      "HK": "中国香港",
-      "TW": "中国台湾",
-      "MO": "中国澳门"
-    },
+  "zh-CN": {
+    appTitle: "无线热点",
+    loading: "正在加载...",
+    refresh: "刷新",
+    start: "开启热点",
+    stop: "关闭热点",
+    save: "保存",
+    saving: "保存中...",
+    status: "状态",
+    config: "配置",
+    clients: "客户端",
+    hotspotDevice: "热点网卡",
+    uplink: "共享网卡",
+    address: "地址",
+    internet: "互联网",
+    password: "密码",
+    allowPorts: "放行端口",
+    country: "国家码",
+    band: "频段",
+    channel: "信道",
+    width: "带宽",
+    autoIface: "自动选择",
+    autoUplink: "自动（系统默认路由）",
+    unavailable: "不可用",
+    running: "运行中",
+    stopped: "已停止",
+    online: "有网",
+    offline: "无网",
+    saved: "已保存",
+    savedRestart: "已保存并重启热点",
+    restarting: "重启中...",
+    started: "热点已开启",
+    stoppedDone: "热点已关闭",
+    noClients: "暂无客户端",
+    kick: "下线",
+    kickTitle: "确认下线",
+    kickConfirm: "确定要让客户端下线？\n{mac}",
+    kicked: "已下线",
+    confirm: "确定",
+    cancel: "取消",
+    warningTitle: "开启前确认",
   },
-  en: {
-    "title.tip": "Info",
-    "title.confirm": "Confirm",
-    "title.progress": "Working",
-    "btn.ok": "OK",
-    "btn.cancel": "Cancel",
-    "btn.continue": "Continue",
-    "btn.save": "Save",
-    "btn.kick": "Kick",
-    "toggle.on": "Hotspot: On",
-    "toggle.off": "Hotspot: Off",
-    "toggle.suffix.net": " (online)",
-    "toggle.suffix.nonnet": " (offline)",
-
-    "err.invalidJson": "Response is not valid JSON",
-    "err.requestTimeout": "Request timed out. Please try again.",
-
-    "section.net": "Network",
-    "section.config": "Config",
-    "section.wifi": "Wi-Fi",
-    "section.clients": "Clients",
-    "label.uplink": "Uplink",
-    "label.iface": "Hotspot device",
-    "label.ssid": "SSID",
-    "label.password": "Password (>=8)",
-    "label.ipCidr": "IP/CIDR",
-    "label.allowPorts": "Allowed ports (client → host)",
-    "label.country": "Country Code",
-    "label.band": "Band",
-    "label.channel": "Channel",
-    "label.width": "Bandwidth",
-    "opt.uplinkAuto": "Auto (default route)",
-    "opt.ifaceAuto": "Auto",
-    "opt.unavailable": " (unavailable)",
-
-    "placeholder.ipCidr": "192.168.12.1/24",
-    "placeholder.allowPorts": "80,443,5666,5667,67-68/udp",
-
-    "pw.show": "Show password",
-    "pw.hide": "Hide password",
-
-    "aria.langSelect": "Language",
-    "aria.themeSelect": "Theme",
-
-    "lang.zh": "中文",
-    "lang.en": "English",
-    "theme.system": "System",
-    "theme.light": "Light",
-    "theme.dark": "Dark",
-
-    "clients.empty": "No clients",
-    "clients.cols": ["Hostname", "MAC", "IP", "Signal", "Online", "Traffic", "Action"],
-    "kick.confirm": "Kick this client?\n{mac}{ip}",
-    "kick.title": "Confirm kick",
-    "kick.progress": "Kicking client…",
-    "kick.done": "Kicked",
-
-    "hotspot.confirmTitle": "Start hotspot",
-    "hotspot.confirmOk": "Start",
-    "hotspot.confirmCancel": "Cancel",
-    "hotspot.confirmMsg": "This adapter does not support STA+AP concurrency. Starting hotspot will disconnect current Wi‑Fi{conPart}. Continue?",
-
-    "progress.enable": "Starting hotspot…",
-    "progress.disable": "Stopping hotspot…",
-    "progress.save": "Saving…",
-    "progress.restart": "Restarting…",
-
-    "msg.canceled": "Canceled",
-    "msg.enabled": "Hotspot started",
-    "msg.disabled": "Hotspot stopped",
-    "msg.saved": "Saved",
-    "msg.savedRestart": "Saved and restarted",
-    "msg.no5g": "5GHz channels unavailable; switched to 2.4GHz",
-    "msg.noWifi": "No Wi-Fi device detected",
-    "msg.countryChangeFailed": "Failed to change country code: {err}",
-    "countryNames": {
-      "CN": "China",
-      "US": "United States",
-      "JP": "Japan",
-      "KR": "Korea",
-      "AU": "Australia",
-      "CA": "Canada",
-      "GB": "United Kingdom",
-      "DE": "Germany",
-      "FR": "France",
-      "IT": "Italy",
-      "ES": "Spain",
-      "NL": "Netherlands",
-      "BE": "Belgium",
-      "CH": "Switzerland",
-      "AT": "Austria",
-      "SE": "Sweden",
-      "NO": "Norway",
-      "DK": "Denmark",
-      "FI": "Finland",
-      "RU": "Russia",
-      "IN": "India",
-      "BR": "Brazil",
-      "MX": "Mexico",
-      "AR": "Argentina",
-      "CL": "Chile",
-      "CO": "Colombia",
-      "PE": "Peru",
-      "VE": "Venezuela",
-      "ZA": "South Africa",
-      "EG": "Egypt",
-      "NG": "Nigeria",
-      "KE": "Kenya",
-      "MA": "Morocco",
-      "TN": "Tunisia",
-      "TR": "Turkey",
-      "SA": "Saudi Arabia",
-      "AE": "United Arab Emirates",
-      "IL": "Israel",
-      "TH": "Thailand",
-      "MY": "Malaysia",
-      "SG": "Singapore",
-      "PH": "Philippines",
-      "ID": "Indonesia",
-      "VN": "Vietnam",
-      "HK": "Hong Kong, China",
-      "TW": "Taiwan, China",
-      "MO": "Macau, China"
-    },
-  }
+  "en-US": {
+    appTitle: "Wi-Fi Hotspot",
+    loading: "Loading...",
+    refresh: "Refresh",
+    start: "Start Hotspot",
+    stop: "Stop Hotspot",
+    save: "Save",
+    saving: "Saving...",
+    status: "Status",
+    config: "Config",
+    clients: "Clients",
+    hotspotDevice: "Hotspot Device",
+    uplink: "Uplink",
+    address: "Address",
+    internet: "Internet",
+    password: "Password",
+    allowPorts: "Allowed Ports",
+    country: "Country Code",
+    band: "Band",
+    channel: "Channel",
+    width: "Bandwidth",
+    autoIface: "Auto",
+    autoUplink: "Auto (default route)",
+    unavailable: "Unavailable",
+    running: "Running",
+    stopped: "Stopped",
+    online: "Online",
+    offline: "Offline",
+    saved: "Saved",
+    savedRestart: "Saved and restarted",
+    restarting: "Restarting...",
+    started: "Hotspot started",
+    stoppedDone: "Hotspot stopped",
+    noClients: "No clients",
+    kick: "Kick",
+    kickTitle: "Confirm kick",
+    kickConfirm: "Kick this client?\n{mac}",
+    kicked: "Kicked",
+    confirm: "OK",
+    cancel: "Cancel",
+    warningTitle: "Before starting",
+  },
 };
 
-let currentLang = (localStorage.getItem("lang") || "").toString();
-if (!currentLang) currentLang = (navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
-if (!I18N[currentLang]) currentLang = "zh";
-
-function t(key, vars = {}) {
-  const dict = I18N[currentLang] || I18N.zh;
-  const v = (dict[key] != null) ? dict[key] : (I18N.zh[key] != null ? I18N.zh[key] : key);
-  if (typeof v !== "string") return v;
-  return v.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, k) => (vars[k] ?? "").toString());
-}
-
-let themeMode = (localStorage.getItem("theme") || "system").toString();
-if (!themeMode) themeMode = "system";
-
-function applyTheme() {
-  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const mode = themeMode === "system" ? (prefersDark ? "dark" : "light") : themeMode;
-  const v = mode === "dark" ? "dark" : "light";
-  document.documentElement.setAttribute("data-theme", v);
-  document.body.setAttribute("data-theme", v);
-  if (themeSelectEl) themeSelectEl.value = themeMode;
-}
-
-function applyI18nStatic() {
-  document.querySelectorAll("[data-i18n]").forEach((el) => {
-    const key = el.getAttribute("data-i18n");
-    if (!key) return;
-    const val = t(key);
-    if (typeof val === "string") el.textContent = val;
-  });
-
-  // Attributes
-  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
-    const key = el.getAttribute("data-i18n-placeholder");
-    if (!key) return;
-    const val = t(key);
-    if (typeof val === "string") el.setAttribute("placeholder", val);
-  });
-  document.querySelectorAll("[data-i18n-aria-label]").forEach((el) => {
-    const key = el.getAttribute("data-i18n-aria-label");
-    if (!key) return;
-    const val = t(key);
-    if (typeof val === "string") el.setAttribute("aria-label", val);
-  });
-
-  // Placeholders
-  const ipCidrEl = form && form.elements ? form.elements["ipCidr"] : null;
-  if (ipCidrEl) ipCidrEl.placeholder = t("placeholder.ipCidr");
-  const allowPortsEl = form && form.elements ? form.elements["allowPorts"] : null;
-  if (allowPortsEl) allowPortsEl.placeholder = t("placeholder.allowPorts");
-
-  // Select labels
-  if (langSelectEl) {
-    const optZh = langSelectEl.querySelector('option[value="zh"]');
-    const optEn = langSelectEl.querySelector('option[value="en"]');
-    if (optZh) optZh.textContent = t("lang.zh");
-    if (optEn) optEn.textContent = t("lang.en");
-    langSelectEl.value = currentLang;
-  }
-  if (themeSelectEl) {
-    const optSys = themeSelectEl.querySelector('option[value="system"]');
-    const optLight = themeSelectEl.querySelector('option[value="light"]');
-    const optDark = themeSelectEl.querySelector('option[value="dark"]');
-    if (optSys) optSys.textContent = t("theme.system");
-    if (optLight) optLight.textContent = t("theme.light");
-    if (optDark) optDark.textContent = t("theme.dark");
-  }
-
-  // Localize country select options if present
-  try {
-    const countrySel = document.getElementById('countryCode');
-    if (countrySel) {
-      const dict = I18N[currentLang] || I18N.zh;
-      const names = dict && dict.countryNames ? dict.countryNames : {};
-      for (const opt of Array.from(countrySel.options)) {
-        const code = (opt.value || '').toString();
-        const name = names[code] || code;
-        opt.textContent = `${code} (${name})`;
-      }
-    }
-  } catch (e) {
-    // noop
-  }
-
-  // Keep toggle label consistent.
-  setRunningUI(lastRunning, lastInternetStatus);
-
-  // Sync password toggle label for current language.
-  setPasswordVisible(passwordVisible);
-}
-
-let activeModalCleanup = null;
-
-function getModalEls() {
-  const modal = $("modal");
-  const modalTitle = $("modalTitle");
-  const modalContent = $("modalContent");
-  const okBtn = $("modalOk");
-  const cancelBtn = $("modalCancel");
-  const actions = modal ? modal.querySelector(".actions") : null;
-  return { modal, modalTitle, modalContent, okBtn, cancelBtn, actions };
-}
-
-function closeModal() {
-  const { modal, actions, okBtn, cancelBtn } = getModalEls();
-  if (!modal) return;
-  if (activeModalCleanup) {
-    const fn = activeModalCleanup;
-    activeModalCleanup = null;
-    try { fn(); } catch { /* ignore */ }
-  }
-
-  // If a descendant currently has focus, move focus away before hiding the modal
-  try {
-    const active = document.activeElement;
-    if (active && modal.contains(active)) {
-      // Try to focus a neutral element to avoid aria-hidden on a focused descendant.
-      if (typeof document.documentElement.focus === "function") {
-        document.documentElement.focus();
-      } else if (typeof active.blur === "function") {
-        active.blur();
-      }
-    }
-  } catch (e) { /* ignore */ }
-
-  modal.classList.remove("show");
-  modal.setAttribute("aria-hidden", "true");
-  if (actions) actions.style.display = "";
-  if (okBtn) okBtn.style.display = "";
-  if (cancelBtn) cancelBtn.style.display = "";
-}
-
-function modalOpen({
-  title = null,
-  message = "",
-  okText = null,
-  cancelText = null,
-  showCancel = false,
-  allowBackdropClose = true,
-  allowEsc = true,
-  hideActions = false,
-} = {}) {
-  const { modal, modalTitle, modalContent, okBtn, cancelBtn, actions } = getModalEls();
-  if (!modal || !modalTitle || !modalContent || !okBtn || !cancelBtn) {
-    // Fallback if internal modal markup is missing.
-    if (showCancel) return Promise.resolve(window.confirm(String(message || "")));
-    // eslint-disable-next-line no-alert
-    window.alert(String(message || ""));
-    return Promise.resolve(true);
-  }
-
-  // Close any existing modal first.
-  closeModal();
-
-  modalTitle.textContent = String(title || t("title.tip"));
-  modalContent.textContent = String(message || "");
-  okBtn.textContent = String(okText || t("btn.ok"));
-  cancelBtn.textContent = String(cancelText || t("btn.cancel"));
-  cancelBtn.style.display = showCancel ? "" : "none";
-  if (actions) actions.style.display = hideActions ? "none" : "";
-
-  const prevActive = document.activeElement;
-  modal.classList.add("show");
-  modal.setAttribute("aria-hidden", "false");
-
-  if (!hideActions) okBtn.focus();
-
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = (val) => {
-      if (done) return;
-      done = true;
-      // Restore previous focus before hiding the modal to avoid hiding a focused descendant.
-      try {
-        if (prevActive && typeof prevActive.focus === "function") prevActive.focus();
-      } catch (e) { /* ignore */ }
-      closeModal();
-      resolve(val);
-    };
-
-    const onKeyDown = (ev) => {
-      if (!ev) return;
-      if (allowEsc && ev.key === "Escape") {
-        ev.preventDefault();
-        finish(false);
-      }
-      if (!hideActions && ev.key === "Enter") {
-        if (document.activeElement === okBtn) {
-          ev.preventDefault();
-          finish(true);
-        }
-      }
-    };
-
-    const onClick = (ev) => {
-      if (!allowBackdropClose) return;
-      const t = ev && ev.target;
-      if (t && t.getAttribute && t.getAttribute("data-modal-close") === "1") finish(false);
-    };
-
-    const onOk = () => finish(true);
-    const onCancel = () => finish(false);
-
-    const cleanup = () => {
-      document.removeEventListener("keydown", onKeyDown);
-      modal.removeEventListener("click", onClick);
-      okBtn.removeEventListener("click", onOk);
-      cancelBtn.removeEventListener("click", onCancel);
-    };
-    activeModalCleanup = cleanup;
-
-    document.addEventListener("keydown", onKeyDown);
-    modal.addEventListener("click", onClick);
-    okBtn.addEventListener("click", onOk);
-    cancelBtn.addEventListener("click", onCancel);
-  });
-}
-
-function internalConfirm(message, {
-  title = null,
-  okText = null,
-  cancelText = null,
-} = {}) {
-  return modalOpen({
-    title: title || t("title.confirm"),
-    message,
-    okText: okText || t("btn.continue"),
-    cancelText: cancelText || t("btn.cancel"),
-    showCancel: true,
-    allowBackdropClose: true,
-    allowEsc: true,
-    hideActions: false,
-  }).then(Boolean);
-}
-
-function internalAlert(message, { title = null, okText = null } = {}) {
-  return modalOpen({
-    title: title || t("title.tip"),
-    message,
-    okText: okText || t("btn.ok"),
-    showCancel: false,
-    allowBackdropClose: true,
-    allowEsc: true,
-    hideActions: false,
-  });
-}
-
-function internalProgress(message, { title = null } = {}) {
-  modalOpen({
-    title: title || t("title.progress"),
-    message,
-    hideActions: true,
-    allowBackdropClose: false,
-    allowEsc: false,
-  }).catch(() => { /* ignore */ });
-  return () => closeModal();
-}
-
-function setRunningUI(running, internetStatus) {
-  lastRunning = !!running;
-  lastInternetStatus = internetStatus;
-  if (!toggleBtn) return;
-  toggleBtn.setAttribute("aria-pressed", lastRunning ? "true" : "false");
-  let suffix = "";
-  if (lastRunning) {
-    if (internetStatus === true) suffix = t("toggle.suffix.net");
-    else if (internetStatus === false) suffix = t("toggle.suffix.nonnet");
-  }
-  const label = `${lastRunning ? t("toggle.on") : t("toggle.off")}${suffix}`;
-  if (toggleText) toggleText.textContent = label;
-  else toggleBtn.textContent = label;
-}
-
-let formDirty = false;
-const markDirty = () => { formDirty = true; };
-
-let passwordVisible = false;
-
-function defaultChannelForBand(band) {
-  return (band === "a") ? "36" : "6";
-}
-
-function channelOptionsForBand(band) {
-  const meta = serverChannelMeta && serverChannelMeta[band];
-  if (meta && Object.keys(meta).length > 0) {
-    // Prefer numeric sort for channel numbers
-    return Object.keys(meta).sort((a, b) => Number(a) - Number(b));
-  }
-  return [];
-}
-
-function updateBandAvailability() {
-  if (!bandEl) return;
-  const opt5g = bandEl.querySelector('option[value="a"]');
-  // Consider 5G available only if there's at least one non-disabled channel
-  let has5g = true;
-  const metaA = serverChannelMeta && serverChannelMeta.a ? serverChannelMeta.a : {};
-  if (Object.keys(metaA).length > 0) {
-    has5g = Object.keys(metaA).some(ch => {
-      const st = (metaA && metaA[ch] && metaA[ch].state) ? metaA[ch].state : null;
-      return st !== 'disabled';
-    });
-  }
-  if (opt5g) opt5g.disabled = !has5g;
-  if (!has5g && bandEl.value === "a") {
-    bandEl.value = "bg";
-    syncChannelSelect({ band: "bg", forceDefaultIfInvalid: true });
-    setMsg(t("msg.no5g"));
-    markDirty();
-  }
-}
-
-function applyChannelOptions(channelOptions) {
-  if (!channelOptions || typeof channelOptions !== "object") return false;
-
-  serverChannelMeta = { bg: {}, a: {} };
-  for (const band of ["bg", "a"]) {
-    const arr = Array.isArray(channelOptions[band]) ? channelOptions[band] : null;
-    if (!Array.isArray(arr)) continue;
-    for (const entry of arr) {
-      const parts = String(entry).split(":");
-      const ch = parts[0] || "";
-      const freq = parts[1] || null;
-      const state = parts[2] || (parts.length > 1 ? "supported" : null);
-      if (ch) serverChannelMeta[band][String(ch)] = { freq, state };
-    }
-  }
-
-  updateBandAvailability();
-  return true;
-}
-
-// Fetch channel options from server for a specific country and apply them.
-async function fetchAndApplyChannelOptions(countryCode, { forceDefaultIfInvalid = false } = {}) {
-  try {
-    // Request server config with optional country override so backend can return proper channelOptions
-    const url = cgiUrl("config_get.cgi") + (countryCode ? `&countryCode=${encodeURIComponent(countryCode)}` : "");
-    const cfg = await getJSON(url);
-    if (applyChannelOptions(cfg && cfg.channelOptions)) {
-      syncChannelSelect({ forceDefaultIfInvalid });
-    }
-  } catch (e) {
-    // Clear the countryCode UI when applying the requested country code failed
-    if (countryCodeEl) {
-      try { countryCodeEl.value = ""; } catch (_) { /* ignore */ }
-    }
-
-    const msg = t("msg.countryChangeFailed", { err: e.message || String(e) });
-    try { internalAlert(msg).catch(() => { /* ignore */ }); } catch (_) { setMsg(msg); }
-  }
-}
-
-function syncChannelSelect({ band, prefer, forceDefaultIfInvalid = false } = {}) {
-  if (!channelEl) return;
-  const b = (band ?? (bandEl && bandEl.value) ?? "bg").toString();
-  const desired = (prefer ?? channelEl.value ?? "").toString().trim();
-  const opts = channelOptionsForBand(b);
-
-  channelEl.innerHTML = "";
-  for (const v of opts) {
-    const opt = document.createElement("option");
-    opt.value = v;
-    // If server provided metadata, show frequency and disable if marked.
-    const meta = (serverChannelMeta[b] && serverChannelMeta[b][v]) ? serverChannelMeta[b][v] : null;
-    opt.textContent = meta && meta.freq ? `${v} (${meta.freq} MHz)` : v;
-    if (meta && meta.state === 'disabled') opt.disabled = true;
-    if (meta && meta.state && meta.state !== 'supported') opt.title = meta.state;
-    channelEl.appendChild(opt);
-  }
-
-  const has = desired && opts.includes(desired);
-  if (has) channelEl.value = desired;
-  else if (forceDefaultIfInvalid || !desired) channelEl.value = defaultChannelForBand(b);
-  else channelEl.value = opts[0] || "";
-}
-
-function isChannelValidForBand(channel, band) {
-  const n = Number.parseInt((channel || "").toString(), 10);
-  if (!Number.isFinite(n)) return false;
-  if (band === "bg") return n >= 1 && n <= 14;
-  if (band === "a") return n >= 34;
-  return true;
-}
-
-function setPasswordVisible(visible) {
-  passwordVisible = !!visible;
-  if (!passwordEl || !pwToggleBtn) return;
-  passwordEl.type = passwordVisible ? "text" : "password";
-  pwToggleBtn.setAttribute("aria-pressed", passwordVisible ? "true" : "false");
-  pwToggleBtn.setAttribute("aria-label", passwordVisible ? t("pw.hide") : t("pw.show"));
-  const eye = pwToggleBtn.querySelector(".icon-eye");
-  const eyeOff = pwToggleBtn.querySelector(".icon-eye-off");
-  if (eye) eye.style.display = passwordVisible ? "none" : "block";
-  if (eyeOff) eyeOff.style.display = passwordVisible ? "block" : "none";
-}
-
-if (pwToggleBtn) {
-  pwToggleBtn.addEventListener("click", () => setPasswordVisible(!passwordVisible));
-  setPasswordVisible(false);
-}
-
-// When band changes, auto-fill a sensible default channel if empty or obviously invalid.
-if (bandEl && channelEl) {
-  bandEl.addEventListener("change", () => {
-    const band = (bandEl.value || "bg").toString();
-    const current = (channelEl.value || "").toString().trim();
-    syncChannelSelect({ band, prefer: current, forceDefaultIfInvalid: true });
-    markDirty();
-  });
-}
-
-// When country code changes, fetch updated regulatory channel options and refresh selects.
-if (countryCodeEl) {
-  countryCodeEl.addEventListener("change", () => {
-    const cc = (countryCodeEl.value || "").toString();
-    // Fetch channel options for the chosen country and update UI accordingly.
-    fetchAndApplyChannelOptions(cc, { forceDefaultIfInvalid: true }).catch((e) => {
-      setMsg(e.message);
-    });
-  });
-}
-
-// Any manual edits should not be overwritten by refresh() unless forced.
-form.addEventListener("input", markDirty);
-form.addEventListener("change", markDirty);
-
-let msgTimer = null;
-function setMsg(t) {
-  // Use internal modal for all prompts.
-  if (msgTimer) {
-    clearTimeout(msgTimer);
-    msgTimer = null;
-  }
-  const text = (t || "").toString().trim();
-  if (!text) return;
-  // Keep legacy toast updated but hidden (in case someone relies on it).
-  if (msgEl) msgEl.textContent = text;
-  internalAlert(text).catch(() => { /* ignore */ });
-}
-
-function formatDuration(sec) {
-  const n = Number(sec);
-  if (!Number.isFinite(n) || n < 0) return "";
-  if (n < 60) return `${n}s`;
-  const m = Math.floor(n / 60);
-  const s = n % 60;
-  if (m < 60) return `${m}m ${s}s`;
-  const h = Math.floor(m / 60);
-  const mm = m % 60;
-  return `${h}h ${mm}m`;
-}
-
-function formatBytes(bytes) {
-  const n = Number(bytes);
-  if (!Number.isFinite(n) || n < 0) return "";
-  if (n < 1024) return `${n} B`;
-  const kb = n / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)} KB`;
-  const mb = kb / 1024;
-  if (mb < 1024) return `${mb.toFixed(1)} MB`;
-  const gb = mb / 1024;
-  return `${gb.toFixed(2)} GB`;
-}
-
-async function kickClient(mac) {
-  const m = (mac || "").toString().trim().toLowerCase();
-  const url = cgiUrl(`kick.cgi?mac=${encodeURIComponent(m)}`);
-  return getJSON(url);
-}
-
-function renderClients(list) {
-  if (!clientsEl) return;
-  clientsEl.innerHTML = "";
-
-  const clients = Array.isArray(list) ? list : [];
-  if (clients.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "clients-empty";
-    empty.textContent = t("clients.empty");
-    clientsEl.appendChild(empty);
-    return;
-  }
-
-  const table = document.createElement("table");
-  table.className = "clients";
-
-  const thead = document.createElement("thead");
-  const hr = document.createElement("tr");
-  const cols = t("clients.cols");
-  const colList = Array.isArray(cols) ? cols : ["主机名", "MAC", "IP", "信号", "在线", "流量", "操作"];
-  for (const name of colList) {
-    const th = document.createElement("th");
-    th.textContent = name;
-    hr.appendChild(th);
-  }
-  thead.appendChild(hr);
-  table.appendChild(thead);
-
-  const tbody = document.createElement("tbody");
-  for (const c of clients) {
-    const tr = document.createElement("tr");
-
-    const mac = (c && c.mac) ? String(c.mac).trim().toLowerCase() : "";
-    const hostname = (c && c.hostname) ? String(c.hostname) : "";
-    const ip = (c && c.ip) ? String(c.ip) : "";
-    const sig = (c && (c.signalDbm ?? c.signal))
-      ? `${String(c.signalDbm ?? c.signal)} dBm`
-      : "";
-    const dur = (c && c.connectedSeconds != null)
-      ? formatDuration(c.connectedSeconds)
-      : "";
-
-    const rx = (c && c.rxBytes != null) ? formatBytes(c.rxBytes) : "";
-    const tx = (c && c.txBytes != null) ? formatBytes(c.txBytes) : "";
-    const traffic = (rx || tx) ? `↓${rx || "0 B"} ↑${tx || "0 B"}` : "";
-
-    for (const txt of [hostname, mac, ip, sig, dur, traffic]) {
-      const td = document.createElement("td");
-      td.textContent = txt;
-      tr.appendChild(td);
-    }
-
-    const tdAct = document.createElement("td");
-    tdAct.className = "clients-actions";
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = t("btn.kick");
-    btn.disabled = !/^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/.test(mac);
-    btn.onclick = async () => {
-      if (!mac) return;
-      const ok = await internalConfirm(t("kick.confirm", { mac, ip: ip ? `\n${ip}` : "" }), {
-        title: t("kick.title"),
-        okText: t("btn.kick"),
-        cancelText: t("btn.cancel"),
-      });
-      if (!ok) return;
-      btn.disabled = true;
-      const closeProg = internalProgress(t("kick.progress"));
-      try {
-        await kickClient(mac);
-        closeProg();
-        setMsg(t("kick.done"));
-        await refresh({ withConfig: false });
-      } catch (e) {
-        closeProg();
-        setMsg(e.message);
-      } finally {
-        btn.disabled = false;
-      }
-    };
-    tdAct.appendChild(btn);
-    tr.appendChild(tdAct);
-
-    tbody.appendChild(tr);
-  }
-
-  table.appendChild(tbody);
-  clientsEl.appendChild(table);
-}
-
-// Determine API path based on current URL.
-// - When hosted via /.../index.cgi/index.html, executable API is exposed under ../www/api.cgi.
-// - When hosted directly from /.../www/index.html, use ./api.cgi.
-const API_ENDPOINT = location.pathname.includes("index.cgi") ? "../www/api.cgi" : "api.cgi";
-const cgiUrl = (target) => {
-  const [rawAction, rawQuery = ""] = String(target || "").split("?", 2);
-  const action = rawAction.replace(/\.cgi$/, "");
-  const u = new URL(API_ENDPOINT, location.href);
-  u.searchParams.set("action", action);
-  if (rawQuery) {
-    const params = new URLSearchParams(rawQuery);
-    for (const [key, value] of params.entries()) {
-      u.searchParams.append(key, value);
-    }
-  }
-  // Pass UI language to backend so CGI can localize messages.
-  u.searchParams.set("lang", currentLang);
-  return u.toString();
+const countries = ["00", "CN", "US", "JP", "KR", "AU", "CA", "GB", "DE", "FR", "IT", "ES", "NL", "BE", "CH", "AT", "SE", "NO", "DK", "FI", "RU", "IN", "BR", "MX", "AR", "CL", "CO", "PE", "ZA", "TR", "SA", "AE", "IL", "TH", "MY", "SG", "PH", "ID", "VN", "HK", "TW", "MO"];
+
+const els = {
+  summary: document.getElementById("statusSummary"),
+  refresh: document.getElementById("refreshBtn"),
+  toggle: document.getElementById("toggleBtn"),
+  save: document.getElementById("saveBtn"),
+  form: document.getElementById("configForm"),
+  iface: document.getElementById("ifaceSelect"),
+  uplink: document.getElementById("uplinkSelect"),
+  country: document.getElementById("countrySelect"),
+  channel: document.getElementById("channelSelect"),
+  clients: document.getElementById("clients"),
+  clientCount: document.getElementById("clientCount"),
+  toast: document.getElementById("toast"),
+  modal: document.getElementById("modal"),
+  modalTitle: document.getElementById("modalTitle"),
+  modalBody: document.getElementById("modalBody"),
+  modalOk: document.getElementById("modalOk"),
+  modalCancel: document.getElementById("modalCancel"),
+  statIface: document.getElementById("statIface"),
+  statUplink: document.getElementById("statUplink"),
+  statIp: document.getElementById("statIp"),
+  statInternet: document.getElementById("statInternet"),
 };
 
-async function fetchText(url, options = {}) {
-  const { timeoutMs = REQUEST_TIMEOUT_MS, ...fetchOptions } = options;
-  const controller = (typeof AbortController === "function") ? new AbortController() : null;
-  const timer = controller && timeoutMs > 0
-    ? window.setTimeout(() => controller.abort(), timeoutMs)
-    : null;
-
-  try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      ...fetchOptions,
-      signal: controller ? controller.signal : fetchOptions.signal,
-    });
-    const text = await response.text();
-    return { response, text };
-  } catch (e) {
-    if (e && e.name === "AbortError") throw new Error(t("err.requestTimeout"));
-    throw e;
-  } finally {
-    if (timer != null) window.clearTimeout(timer);
-  }
+function safeDecode(value) {
+  try { return decodeURIComponent(value || ""); } catch (_error) { return value || ""; }
 }
 
-async function getJSON(url) {
-  const { response: r, text } = await fetchText(url);
-  let j = null;
-  try {
-    j = text ? JSON.parse(text) : {};
-  } catch (e) {
-    j = null;
-  }
-
-  // If server responded non-2xx, prefer JSON.error -> raw text -> statusText
-  if (!r.ok) {
-    const msg = (j && j.error) || text || r.statusText;
-    throw new Error(msg);
-  }
-
-  // 2xx but not JSON: present raw text as error so UI shows useful info
-  if (!j) {
-    const msg = text || t("err.invalidJson");
-    throw new Error(msg);
-  }
-
-  if (j.ok === false) throw new Error(j.error || r.statusText);
-  return j;
+function cookieValue(name) {
+  const prefix = `${name}=`;
+  return document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith(prefix))?.slice(prefix.length) || "";
 }
 
-async function postForm(url, dataObj) {
-  const body = new URLSearchParams(dataObj).toString();
-  const { response: r, text } = await fetchText(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body
+function storedValue(name) {
+  try { return localStorage.getItem(name) || sessionStorage.getItem(name) || ""; } catch (_error) { return ""; }
+}
+
+function parentStoredValue(name) {
+  try {
+    if (!window.parent || window.parent === window) return "";
+    return window.parent.localStorage.getItem(name) || window.parent.sessionStorage.getItem(name) || "";
+  } catch (_error) { return ""; }
+}
+
+function queryValue(name) {
+  return new URLSearchParams(location.search).get(name) || "";
+}
+
+function documentThemeValue(doc) {
+  if (!doc) return "";
+  const root = doc.documentElement;
+  const body = doc.body;
+  return [body?.getAttribute("theme-mode"), body?.dataset?.theme, root?.dataset?.theme, root?.classList?.contains("dark") ? "dark" : "", root?.classList?.contains("light") ? "light" : ""].find(Boolean) || "";
+}
+
+function parentDocumentThemeValue() {
+  try {
+    if (!window.parent || window.parent === window) return "";
+    return documentThemeValue(window.parent.document);
+  } catch (_error) { return ""; }
+}
+
+function normalizeLanguage(value) {
+  const language = safeDecode(value).replace("_", "-");
+  return language.toLowerCase().startsWith("zh") ? "zh-CN" : "en-US";
+}
+
+function normalizeTheme(value) {
+  const theme = safeDecode(value).toLowerCase();
+  if (theme.includes("dark") || theme === "night") return "dark";
+  if (theme.includes("light") || theme === "day") return "light";
+  if (["system", "auto", "os"].includes(theme)) return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "";
+}
+
+function currentTheme() {
+  return [queryValue("theme"), cookieValue("fnos-theme-mode"), cookieValue("os-theme-mode"), storedValue("fnos-theme-mode"), storedValue("os-theme-mode"), parentStoredValue("fnos-theme-mode"), parentStoredValue("os-theme-mode"), documentThemeValue(document), parentDocumentThemeValue()].map(normalizeTheme).find(Boolean) || (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+}
+
+function t(key, params = {}) {
+  const messages = I18N[state.language] || I18N["zh-CN"];
+  return String(messages[key] || I18N["zh-CN"][key] || key).replace(/\{(\w+)\}/g, (_match, name) => params[name] ?? "");
+}
+
+function applyPreferences({ rerender = false } = {}) {
+  const nextLanguage = normalizeLanguage(cookieValue("language") || queryValue("language") || navigator.language || "zh-CN");
+  const changed = nextLanguage !== state.language;
+  state.language = nextLanguage;
+  state.theme = currentTheme();
+  document.documentElement.lang = nextLanguage;
+  document.documentElement.dataset.theme = state.theme;
+  document.body.dataset.theme = state.theme;
+  document.querySelectorAll("[data-i18n]").forEach((node) => { node.textContent = t(node.dataset.i18n); });
+  document.title = t("appTitle");
+  if (state.status) {
+    render();
+  } else {
+    els.summary.textContent = t("loading");
+    els.toggle.textContent = t("start");
+  }
+  if (rerender && changed) render();
+}
+
+function showToast(message, error = false) {
+  els.toast.textContent = message;
+  els.toast.classList.toggle("error", error);
+  els.toast.classList.remove("hidden");
+  clearTimeout(els.toast._timer);
+  els.toast._timer = setTimeout(() => els.toast.classList.add("hidden"), 2600);
+}
+
+function setBusy(busy) {
+  state.busy = Boolean(busy);
+  els.refresh.disabled = state.busy;
+  els.save.disabled = state.busy || !state.loaded;
+  els.toggle.disabled = state.busy || !state.loaded;
+}
+
+function apiUrl(action) {
+  const [path, rawQuery = ""] = String(action).split("?", 2);
+  const params = new URLSearchParams(rawQuery);
+  params.set("lang", state.language === "zh-CN" ? "zh-CN" : "en-US");
+  return `${API}/${encodeURIComponent(path)}?${params.toString()}`;
+}
+
+async function api(action, { method = "GET", data = null } = {}) {
+  const options = { method, cache: "no-store" };
+  if (data) {
+    options.method = method === "GET" ? "POST" : method;
+    options.headers = { "Content-Type": "application/x-www-form-urlencoded" };
+    options.body = new URLSearchParams(data);
+  }
+  const response = await fetch(apiUrl(action), options);
+  const result = await response.json();
+  if (!response.ok || result.ok === false) {
+    throw new Error(result.error || result.message || `HTTP ${response.status}`);
+  }
+  return result;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+}
+
+function setOptions(select, values, selected, firstLabel = "") {
+  const options = [];
+  if (firstLabel) options.push(`<option value="">${escapeHtml(firstLabel)}</option>`);
+  values.forEach((value) => {
+    const label = Array.isArray(value) ? value[1] : value;
+    const optionValue = Array.isArray(value) ? value[0] : value;
+    options.push(`<option value="${escapeHtml(optionValue)}">${escapeHtml(label)}</option>`);
   });
-  let j = null;
-  try {
-    j = text ? JSON.parse(text) : {};
-  } catch (e) {
-    j = null;
-  }
-  if (!r.ok) {
-    const msg = (j && j.error) || text || r.statusText;
-    throw new Error(msg);
-  }
-  if (!j) {
-    const msg = text || t("err.invalidJson");
-    throw new Error(msg);
-  }
-  if (j.ok === false) throw new Error(j.error || r.statusText);
-  return j;
+  select.innerHTML = options.join("");
+  select.value = selected || "";
 }
 
-function readForm() {
-  const fd = new FormData(form);
+function channelOptions() {
+  const band = els.form.elements.band.value || "bg";
+  const raw = state.channels[band] || [];
+  const parsed = raw.map((item) => {
+    const [channel, freq, support] = String(item).split(":");
+    return [channel, `${channel} (${freq} MHz${support === "disabled" ? `, ${t("unavailable")}` : ""})`];
+  });
+  if (!parsed.length) {
+    return band === "a" ? [["36", "36"], ["40", "40"], ["44", "44"], ["48", "48"], ["149", "149"]] : [["1", "1"], ["6", "6"], ["11", "11"]];
+  }
+  return parsed;
+}
+
+function fillForm() {
+  const cfg = state.config || {};
+  els.form.ssid.value = cfg.ssid || "";
+  els.form.password.value = cfg.password || "";
+  els.form.ipCidr.value = cfg.ipCidr || "";
+  els.form.allowPorts.value = cfg.allowPorts || "";
+  els.form.band.value = cfg.band || "bg";
+  els.form.channelWidth.value = cfg.channelWidth || "20";
+  setOptions(els.country, countries, cfg.countryCode || "00");
+  setOptions(els.channel, channelOptions(), cfg.channel || "");
+}
+
+function collectForm() {
   return {
-    iface: (fd.get("iface") || "").toString().trim(),
-    uplinkIface: (fd.get("uplinkIface") || "").toString().trim(),
-    ipCidr: (fd.get("ipCidr") || "").toString().trim(),
-    allowPorts: (fd.get("allowPorts") || "").toString().trim(),
-    ssid: (fd.get("ssid") || "").toString().trim(),
-    password: (fd.get("password") || "").toString(),
-    countryCode: (fd.get("countryCode") || "").toString(),
-    band: (fd.get("band") || "bg").toString(),
-    channel: (fd.get("channel") || "6").toString(),
-    channelWidth: (fd.get("channelWidth") || "20").toString()
+    iface: els.form.iface.value,
+    uplinkIface: els.form.uplinkIface.value,
+    ssid: els.form.ssid.value,
+    password: els.form.password.value,
+    ipCidr: els.form.ipCidr.value,
+    allowPorts: els.form.allowPorts.value,
+    countryCode: els.form.countryCode.value,
+    band: els.form.band.value,
+    channel: els.form.channel.value,
+    channelWidth: els.form.channelWidth.value,
   };
 }
 
-function fillForm(cfg) {
-  if (!cfg || typeof cfg !== "object") return;
-  for (const [k, v] of Object.entries(cfg)) {
-    const el = form.elements[k];
-    if (el) el.value = v ?? "";
-  }
+function formatBytes(value) {
+  const n = Number(value || 0);
+  if (!n) return "-";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function setIfaceOptions(ifaces, selected, autoResolved) {
-  if (!ifaceEl || !ifaceEl.options) return;
-
-  const list = Array.isArray(ifaces) ? ifaces.map(String) : [];
-  let uniq = Array.from(new Set(list.filter(Boolean)));
-
-  const keep = (selected ?? "").toString();
-  const autoResolvedName = (autoResolved || '').toString().trim();
-  if (!keep && autoResolvedName) {
-    uniq = uniq.filter((d) => d !== autoResolvedName);
-  }
-  const needsUnknown = keep && !uniq.includes(keep);
-
-  ifaceEl.innerHTML = '';
-  const autoOpt = document.createElement('option');
-  autoOpt.value = '';
-  autoOpt.textContent = keep
-    ? t('opt.ifaceAuto')
-    : (autoResolvedName || t('opt.ifaceAuto'));
-  ifaceEl.appendChild(autoOpt);
-
-  for (const d of uniq) {
-    const opt = document.createElement('option');
-    opt.value = d;
-    opt.textContent = d;
-    ifaceEl.appendChild(opt);
-  }
-
-  if (needsUnknown) {
-    const opt = document.createElement('option');
-    opt.value = keep;
-    opt.textContent = `${keep}${t('opt.unavailable')}`;
-    ifaceEl.appendChild(opt);
-  }
-
-  ifaceEl.value = keep;
-}
-
-function setUplinkOptions(uplinks, selected, autoResolved) {
-  if (!uplinkEl || !uplinkEl.options) return;
-
-  const list = Array.isArray(uplinks) ? uplinks.map(String) : [];
-  let uniq = Array.from(new Set(list.filter(Boolean)));
-
-  const keep = (selected ?? "").toString();
-  const autoResolvedName = (autoResolved || '').toString().trim();
-  if (!keep && autoResolvedName) {
-    uniq = uniq.filter((d) => d !== autoResolvedName);
-  }
-  const needsUnknown = keep && !uniq.includes(keep);
-
-  uplinkEl.innerHTML = '';
-  const autoOpt = document.createElement('option');
-  autoOpt.value = '';
-  autoOpt.textContent = keep
-    ? t('opt.uplinkAuto')
-    : (autoResolvedName || t('opt.uplinkAuto'));
-  uplinkEl.appendChild(autoOpt);
-
-  for (const d of uniq) {
-    const opt = document.createElement('option');
-    opt.value = d;
-    opt.textContent = d;
-    uplinkEl.appendChild(opt);
-  }
-
-  if (needsUnknown) {
-    const opt = document.createElement('option');
-    opt.value = keep;
-    opt.textContent = `${keep}${t('opt.unavailable')}`;
-    uplinkEl.appendChild(opt);
-  }
-
-  uplinkEl.value = keep;
-}
-
-function notifyIfNoWifiIfaces(ifaces) {
-  const list = Array.isArray(ifaces) ? ifaces.filter(Boolean) : [];
-  const hasWifi = list.length > 0;
-  if (hasWifi) {
-    noWifiNoticeShown = false;
+function renderClients(clients) {
+  els.clientCount.textContent = String(clients.length);
+  if (!clients.length) {
+    els.clients.innerHTML = `<div class="empty">${t("noClients")}</div>`;
     return;
   }
-  if (noWifiNoticeShown) return;
-  noWifiNoticeShown = true;
-  internalAlert(t("msg.noWifi")).catch(() => { /* ignore */ });
+  els.clients.innerHTML = clients.map((client) => `
+    <div class="client-row">
+      <strong>${escapeHtml(client.hostname || "-")}</strong>
+      <span>${escapeHtml(client.mac || "-")}</span>
+      <span>${escapeHtml(client.ip || "-")}</span>
+      <span>${client.signalDbm == null ? "-" : `${client.signalDbm} dBm`}</span>
+      <span class="client-muted">${formatBytes(client.rxBytes)} / ${formatBytes(client.txBytes)}</span>
+      <button class="danger-btn" type="button" data-kick="${escapeHtml(client.mac || "")}">${t("kick")}</button>
+    </div>
+  `).join("");
 }
 
-async function refresh({ force = false, withConfig = true } = {}) {
-  const baseline = readForm();
-
-  if (withConfig) {
-    const [cfg, st, cl, ifs, ups] = await Promise.all([
-      getJSON(cgiUrl("config_get.cgi")),
-      getJSON(cgiUrl("status.cgi")),
-      getJSON(cgiUrl("clients.cgi")),
-      getJSON(cgiUrl("ifaces.cgi")),
-      getJSON(cgiUrl("uplinks.cgi")),
-    ]);
-
-    const cfgObj = cfg && cfg.config;
-    applyChannelOptions(cfg && cfg.channelOptions);
-    const current = (!force && formDirty) ? baseline : null;
-    notifyIfNoWifiIfaces(ifs && ifs.ifaces);
-    const selectedIface = current ? current.iface : (cfgObj && cfgObj.iface);
-    const selectedUplink = current ? current.uplinkIface : (cfgObj && cfgObj.uplinkIface);
-    const autoIface = st && st.status ? st.status.iface : "";
-    const autoUplink = st && st.status ? (st.status.effectiveUplinkIface || st.status.uplinkIface || "") : "";
-    setIfaceOptions(ifs && ifs.ifaces, selectedIface, autoIface);
-    setUplinkOptions(ups && ups.uplinks, selectedUplink, autoUplink);
-
-    if (cfgObj && (force || !formDirty)) {
-      fillForm(cfgObj);
-      // After fill, rebuild channel list based on current band.
-      syncChannelSelect({ forceDefaultIfInvalid: true });
-      formDirty = false;
-    }
-
-    setRunningUI(
-      st && st.status && st.status.running === true,
-      st && st.status ? st.status.internetStatus : undefined
-    );
-    if (statusEl) statusEl.textContent = JSON.stringify(st.status, null, 2);
-    renderClients(cl.clients);
-    return;
-  }
-
-  const [st, cl, ifs, ups] = await Promise.all([
-    getJSON(cgiUrl("status.cgi")),
-    getJSON(cgiUrl("clients.cgi")),
-    getJSON(cgiUrl("ifaces.cgi")),
-    getJSON(cgiUrl("uplinks.cgi")),
-  ]);
-
-  // No config fetch: keep current form values while refreshing option lists.
-  notifyIfNoWifiIfaces(ifs && ifs.ifaces);
-  const autoIface = st && st.status ? st.status.iface : "";
-  const autoUplink = st && st.status ? (st.status.effectiveUplinkIface || st.status.uplinkIface || "") : "";
-  setIfaceOptions(ifs && ifs.ifaces, baseline.iface, autoIface);
-  setUplinkOptions(ups && ups.uplinks, baseline.uplinkIface, autoUplink);
-  setRunningUI(
-    st && st.status && st.status.running === true,
-    st && st.status ? st.status.internetStatus : undefined
-  );
-  if (statusEl) statusEl.textContent = JSON.stringify(st.status, null, 2);
-  renderClients(cl.clients);
+function render() {
+  const status = state.status || {};
+  state.running = Boolean(status.running);
+  els.summary.textContent = state.running ? `${t("running")} · ${status.hotspotIface || "-"}` : t("stopped");
+  els.toggle.textContent = state.running ? t("stop") : t("start");
+  els.statIface.textContent = status.hotspotIface || status.iface || "-";
+  els.statUplink.textContent = status.effectiveUplinkIface || status.uplinkIface || "-";
+  els.statIp.textContent = status.ip || "-";
+  els.statInternet.textContent = status.internetStatus ? t("online") : t("offline");
+  els.statInternet.className = status.internetStatus ? "ok" : "bad";
 }
 
-$("save").onclick = async (ev) => {
-  if (ev && typeof ev.preventDefault === "function") ev.preventDefault();
-  const saveBtn = $("save");
+async function loadAll() {
+  setBusy(true);
   try {
-    if (saveBtn) saveBtn.disabled = true;
-    if (lastRunning) {
-      const closeRestart = internalProgress(t("progress.restart"));
-      await getJSON(cgiUrl("stop.cgi"));
-      await postForm(cgiUrl("config_set.cgi"), readForm());
-      await getJSON(cgiUrl("start.cgi"));
-      closeRestart();
-      setMsg(t("msg.savedRestart"));
-      await refresh({ withConfig: false });
+    const [config, ifaces, uplinks, status, clients] = await Promise.all([
+      api("config_get"),
+      api("ifaces"),
+      api("uplinks"),
+      api("status"),
+      api("clients"),
+    ]);
+    state.config = config.config || {};
+    state.channels = config.channelOptions || { bg: [], a: [] };
+    setOptions(els.iface, ifaces.ifaces || [], state.config.iface || "", t("autoIface"));
+    setOptions(els.uplink, uplinks.uplinks || [], state.config.uplinkIface || "", t("autoUplink"));
+    fillForm();
+    state.status = status.status || {};
+    state.loaded = true;
+    render();
+    renderClients(clients.clients || []);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function refreshLiveData({ silent = true } = {}) {
+  if (!state.loaded || state.busy || state.polling) return;
+  state.polling = true;
+  try {
+    const [status, clients] = await Promise.all([
+      api("status"),
+      api("clients"),
+    ]);
+    state.status = status.status || {};
+    render();
+    renderClients(clients.clients || []);
+  } catch (error) {
+    if (!silent) showToast(error.message, true);
+  } finally {
+    state.polling = false;
+  }
+}
+
+function confirmDialog(title, body) {
+  return new Promise((resolve) => {
+    els.modalTitle.textContent = title;
+    els.modalBody.textContent = body;
+    els.modal.classList.remove("hidden");
+    const done = (value) => {
+      els.modal.classList.add("hidden");
+      els.modalOk.onclick = null;
+      els.modalCancel.onclick = null;
+      resolve(value);
+    };
+    els.modalOk.onclick = () => done(true);
+    els.modalCancel.onclick = () => done(false);
+  });
+}
+
+async function saveConfig() {
+  if (!state.loaded) return;
+  const shouldRestart = state.running;
+  setBusy(true);
+  els.save.textContent = t("saving");
+  try {
+    await api("config_set", { method: "POST", data: collectForm() });
+    if (shouldRestart) {
+      els.save.textContent = t("restarting");
+      await api("stop");
+      await api("start");
+      showToast(t("savedRestart"));
     } else {
-      const closeProg = internalProgress(t("progress.save"));
-      await postForm(cgiUrl("config_set.cgi"), readForm());
-      closeProg();
-      setMsg(t("msg.saved"));
-      await refresh({ force: true });
+      showToast(t("saved"));
     }
-  } catch (e) {
-    setMsg(e.message);
+    await loadAll();
   } finally {
-    if (saveBtn) saveBtn.disabled = false;
+    setBusy(false);
+    els.save.textContent = t("save");
   }
-};
-if (toggleBtn) {
-  toggleBtn.onclick = async () => {
-    try {
-      toggleBtn.disabled = true;
-      if (lastRunning) {
-        const closeProg = internalProgress(t("progress.disable"));
-        await getJSON(cgiUrl("stop.cgi"));
-        closeProg();
-        setMsg(t("msg.disabled"));
-      } else {
-        // If STA+AP concurrent mode is not supported, starting hotspot will disconnect current Wi-Fi.
-        try {
-          // Let backend perform pre-start checks and surface any warnings/errors.
-          const stpre = await getJSON(cgiUrl("stpre.cgi"));
-
-          const warnings = [];
-          if (stpre && Array.isArray(stpre.warnings)) {
-            warnings.push(...stpre.warnings.map(String));
-          }
-
-          // If backend requests abort, stop start flow and show message.
-          if (stpre && stpre.abort) {
-            setMsg(stpre.error || t("msg.canceled"));
-            return;
-          }
-
-          // If there are warnings, ask user to confirm before proceeding.
-          if (warnings.length > 0) {
-            const warnMsg = warnings.join("\n");
-            const ok = await internalConfirm(warnMsg, {
-              title: t("hotspot.confirmTitle"),
-              okText: t("hotspot.confirmOk"),
-              cancelText: t("hotspot.confirmCancel"),
-            });
-            if (!ok) {
-              setMsg(t("msg.canceled"));
-              return;
-            }
-          }
-        } catch (_) { /* ignore */ }
-        const closeProg = internalProgress(t("progress.enable"));
-        await getJSON(cgiUrl("start.cgi"));
-        closeProg();
-        setMsg(t("msg.enabled"));
-      }
-      await refresh({ withConfig: false });
-    } catch (e) {
-      setMsg(e.message);
-    } finally {
-      toggleBtn.disabled = false;
-    }
-  };
 }
 
-// Theme + language init
-if (langSelectEl) {
-  langSelectEl.value = currentLang;
-  langSelectEl.onchange = () => {
-    const v = (langSelectEl.value || "zh").toString();
-    currentLang = I18N[v] ? v : "zh";
-    localStorage.setItem("lang", currentLang);
-    applyI18nStatic();
-    refresh({ withConfig: false }).catch(e => setMsg(e.message));
-  };
-}
-if (themeSelectEl) {
-  themeSelectEl.value = themeMode;
-  themeSelectEl.onchange = () => {
-    const v = (themeSelectEl.value || "system").toString();
-    themeMode = (v === "light" || v === "dark" || v === "system") ? v : "system";
-    localStorage.setItem("theme", themeMode);
-    applyTheme();
-  };
-}
-applyTheme();
-applyI18nStatic();
-if (window.matchMedia) {
-  const mql = window.matchMedia("(prefers-color-scheme: dark)");
-  const onChange = () => { if (themeMode === "system") applyTheme(); };
-  if (typeof mql.addEventListener === "function") mql.addEventListener("change", onChange);
-  else if (typeof mql.addListener === "function") mql.addListener(onChange);
-}
-
-refresh({ force: true }).catch(e => setMsg(e.message));
-
-// Init channel options on first load.
-syncChannelSelect({ forceDefaultIfInvalid: true });
-
-// Auto refresh clients (and running state) every 5 seconds.
-let autoRefreshInFlight = false;
-async function refreshClientsOnly() {
-  if (autoRefreshInFlight) return;
-  autoRefreshInFlight = true;
+async function toggleHotspot() {
+  if (!state.loaded) return;
+  setBusy(true);
   try {
-    const [st, cl] = await Promise.all([
-      getJSON(cgiUrl("status.cgi")),
-      getJSON(cgiUrl("clients.cgi")),
-    ]);
-    setRunningUI(
-      st && st.status && st.status.running === true,
-      st && st.status ? st.status.internetStatus : undefined
-    );
-    renderClients(cl && cl.clients);
+    if (state.running) {
+      await api("stop");
+      showToast(t("stoppedDone"));
+    } else {
+      await api("config_set", { method: "POST", data: collectForm() });
+      const pre = await api("stpre");
+      if (pre.abort) throw new Error(pre.error || "start aborted");
+      if (Array.isArray(pre.warnings) && pre.warnings.length) {
+        const ok = await confirmDialog(t("warningTitle"), pre.warnings.join("\n"));
+        if (!ok) return;
+      }
+      await api("start");
+      showToast(t("started"));
+    }
+    await loadAll();
   } finally {
-    autoRefreshInFlight = false;
+    setBusy(false);
   }
 }
 
-setInterval(() => {
-  refreshClientsOnly().catch(() => { /* keep UI quiet */ });
-}, 5000);
+els.refresh.addEventListener("click", () => loadAll().catch((error) => showToast(error.message, true)));
+els.save.addEventListener("click", () => saveConfig().catch((error) => showToast(error.message, true)));
+els.toggle.addEventListener("click", () => toggleHotspot().catch((error) => showToast(error.message, true)));
+els.form.elements.band.addEventListener("change", () => setOptions(els.channel, channelOptions(), ""));
+els.clients.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-kick]");
+  if (!button) return;
+  const mac = button.dataset.kick;
+  const ok = await confirmDialog(t("kickTitle"), t("kickConfirm", { mac }));
+  if (!ok) return;
+  await api(`kick?mac=${encodeURIComponent(mac)}`);
+  showToast(t("kicked"));
+  await loadAll();
+});
+
+applyPreferences();
+window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", () => applyPreferences());
+window.addEventListener("storage", () => applyPreferences({ rerender: true }));
+setInterval(() => applyPreferences({ rerender: true }), 1500);
+setInterval(() => refreshLiveData(), 5000);
+setBusy(true);
+loadAll().catch((error) => {
+  state.loaded = false;
+  setBusy(false);
+  showToast(error.message, true);
+});

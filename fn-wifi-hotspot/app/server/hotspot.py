@@ -1,18 +1,28 @@
 #!/usr/bin/env python3
+import argparse
 import json
+import mimetypes
 import os
 import re
 import shlex
 import shutil
 import signal
+import socketserver
 import subprocess
 import sys
+import threading
 import time
+import urllib.parse
 from ipaddress import IPv4Interface, ip_address
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
 from urllib.parse import parse_qs
 
 
-DATA_DIR = os.environ.get("DATA_DIR", "/var/apps/fn-wifi-hotspot/target/server")
+ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
+DATA_DIR = os.environ.get("DATA_DIR", ROOT_DIR)
 CFG_FILE = os.environ.get("CFG_FILE", os.path.join(DATA_DIR, "hotspot.env"))
 NAT_STATE_FILE = os.environ.get("NAT_STATE_FILE", os.path.join(DATA_DIR, "nat.env"))
 PORTS_STATE_FILE = os.environ.get("PORTS_STATE_FILE", os.path.join(DATA_DIR, "ports.state"))
@@ -50,6 +60,27 @@ CONFIG_KEYS = [
 CURRENT_STEP = "init"
 QUERY = parse_qs(os.environ.get("QUERY_STRING", ""), keep_blank_values=True)
 BODY = {}
+REQUEST_CONTEXT = threading.local()
+
+
+class ResponseDone(Exception):
+    pass
+
+
+def current_request():
+    return getattr(REQUEST_CONTEXT, "value", None)
+
+
+class ThreadingUnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+    def __init__(self, socket_path, handler_cls, *, base_path, www_root):
+        self.server_name = "fn-wifi-hotspot"
+        self.server_port = 0
+        self.base_path = normalize_base_path(base_path)
+        self.www_root = Path(www_root)
+        super().__init__(socket_path, handler_cls)
 
 
 def ensure_data_dir():
@@ -126,6 +157,18 @@ def write_shell_state(path, mapping):
 
 
 def http_write(payload):
+    request = current_request()
+    handler = request.get("handler") if request else None
+    if handler is not None:
+        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        handler.send_response(HTTPStatus.OK)
+        handler.send_header("Content-Type", "application/json; charset=utf-8")
+        handler.send_header("Cache-Control", "no-store")
+        handler.send_header("Content-Length", str(len(body)))
+        handler.end_headers()
+        if handler.command != "HEAD":
+            handler.wfile.write(body)
+        raise ResponseDone()
     sys.stdout.write("Status: 200 OK\r\n")
     sys.stdout.write("Content-Type: application/json\r\n")
     sys.stdout.write("Cache-Control: no-store\r\n\r\n")
@@ -135,13 +178,15 @@ def http_write(payload):
 
 
 def first_query_value(name):
-    values = QUERY.get(name)
+    request = current_request()
+    query = request.get("query") if request else QUERY
+    values = query.get(name)
     return values[0] if values else ""
 
 
 def ui_lang():
     lang = first_query_value("lang").lower()
-    if lang in {"zh", "zh-cn", "zh_cn"}:
+    if lang in {"zh", "zh-cn", "zh_cn", "zh-hans"}:
         return "zh"
     if lang in {"en", "en-us", "en_us"}:
         return "en"
@@ -187,6 +232,10 @@ LOCALIZE_REGEX = [
     (r"^channel: (.+) is disabled \(regdom=(.+)\)$", r"信道：\1 已被禁用（regdom=\2）"),
     (r"^channel: (.+) is marked 'no IR' \(regdom=(.+)\), hotspot may not be allowed\. Try band bg \(2\.4G\) or set regulatory domain \(e\.g\. iw reg set <CC>\)\.$", r"信道：\1 标记为 'no IR'（regdom=\2），可能不允许开启热点。建议改用 bg (2.4G) 或设置监管域（例如 iw reg set <CC>）。"),
     (r"^Warning: Country Code is \(00\); 5.0GHz channels may not be enabled\.$", "监管域为 00；5.0GHz 信道可能不可用。"),
+    (
+        r"^Warning: driver '([^']+)' is reporting very low transmit power \(([^)]+)\)\. Hotspot can start, but discovery/range may be poor\. Try 2\.4GHz/20MHz first; if coverage is still weak, this points to an ([^ ]+) driver/firmware power issue rather than hotspot setup\.$",
+        r"警告：驱动 '\1' 当前发射功率很低（\2）。热点可以开启，但发现设备或覆盖范围可能较差。建议先使用 2.4GHz/20MHz；如果覆盖仍然很弱，通常指向 \3 驱动/固件功率问题，而不是热点配置问题。",
+    ),
     (r"^Warning: Adapter does not support STA\+AP; disconnected '([^']*)' on '([^']*)'\.$", r"网卡不支持 STA+AP，已断开 '\1' 在 '\2'。"),
     (r"^Warning: Adapter does not support STA\+AP; hotspot will use '([^']*)' \(may interrupt Wi‑Fi\)\.$", r"网卡不支持 STA+AP；热点将使用 '\1'（可能中断 Wi‑Fi）。"),
     (r"^curl failed on dev (.+)$", r"curl 检查互联网连接失败（设备：\1）。"),
@@ -244,6 +293,9 @@ def output_response(output_text, notice=None):
 
 
 def parse_form_body():
+    request = current_request()
+    if request:
+        return request.get("body") or {}
     method = (os.environ.get("REQUEST_METHOD") or "GET").upper()
     if method != "POST":
         return {}
@@ -258,7 +310,9 @@ def parse_form_body():
 
 
 def first_form_value(name):
-    values = BODY.get(name)
+    request = current_request()
+    body = request.get("body") if request else BODY
+    values = body.get(name)
     return values[0] if values else ""
 
 
@@ -537,7 +591,7 @@ def wifi_low_power_notice(device):
     if driver == "mt7921e" and wifi_txpower_is_suspiciously_low(device):
         return (
             f"Warning: driver '{driver}' is reporting very low transmit power ({tx_power} dBm). "
-            "Hotspot is running, but discovery/range may still be poor. Try 2.4GHz/20MHz first; "
+            "Hotspot can start, but discovery/range may be poor. Try 2.4GHz/20MHz first; "
             "if coverage is still weak, this points to an mt7921e driver/firmware power issue rather than hotspot setup."
         )
     return ""
@@ -1550,25 +1604,181 @@ ACTIONS = {
 }
 
 
+def normalize_base_path(path):
+    if not path:
+        return "/"
+    normalized = path.strip()
+    if not normalized.startswith("/"):
+        normalized = "/" + normalized
+    return normalized.rstrip("/") or "/"
+
+
+def strip_base_path(path, base_path):
+    if base_path != "/" and path.startswith(base_path):
+        return path[len(base_path) :] or "/"
+    return path or "/"
+
+
+def parse_request_body(handler):
+    length = int(handler.headers.get("Content-Length") or 0)
+    raw = handler.rfile.read(length) if length else b""
+    if not raw:
+        return {}
+    text = raw.decode("utf-8", "replace")
+    content_type = handler.headers.get("Content-Type", "")
+    if "application/json" in content_type:
+        payload = json.loads(text or "{}")
+        return {key: ["" if value is None else str(value)] for key, value in payload.items()}
+    return parse_qs(text, keep_blank_values=True)
+
+
+def merge_query_action(path, query):
+    parsed = parse_qs(query or "", keep_blank_values=True)
+    if "action" not in parsed:
+        parts = [part for part in path.split("/") if part]
+        if len(parts) >= 2 and parts[0] == "api":
+            parsed["action"] = [parts[1]]
+    return parsed
+
+
+def dispatch_api(handler, api_path, query):
+    previous = current_request()
+    try:
+        REQUEST_CONTEXT.value = {
+            "handler": handler,
+            "body": parse_request_body(handler),
+            "query": merge_query_action(api_path, query),
+        }
+        action = first_query_value("action")
+        if action.endswith(".cgi"):
+            action = action[:-4]
+        if not action:
+            error_response("400 Bad Request", "missing action")
+        handler_fn = ACTIONS.get(action)
+        if not handler_fn:
+            error_response("404 Not Found", f"unknown action: {action}")
+        handler_fn()
+    except ResponseDone:
+        return
+    except Exception as exc:
+        try:
+            error_response("500 Internal Server Error", f"unexpected error (step={CURRENT_STEP}): {exc}")
+        except ResponseDone:
+            return
+    finally:
+        if previous is None:
+            if hasattr(REQUEST_CONTEXT, "value"):
+                del REQUEST_CONTEXT.value
+        else:
+            REQUEST_CONTEXT.value = previous
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def do_GET(self):
+        self.route()
+
+    def do_HEAD(self):
+        self.route()
+
+    def do_POST(self):
+        self.route()
+
+    def do_PUT(self):
+        self.route()
+
+    def log_message(self, fmt, *args):
+        sys.stdout.write("%s - - %s\n" % (self.client_address, fmt % args))
+        sys.stdout.flush()
+
+    def route(self):
+        parsed = urlsplit(self.path)
+        if parsed.path == self.server.base_path:
+            location = self.server.base_path + "/"
+            if parsed.query:
+                location += "?" + parsed.query
+            self.send_response(HTTPStatus.MOVED_PERMANENTLY)
+            self.send_header("Location", location)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        path = strip_base_path(parsed.path, self.server.base_path)
+        if path == "/api" or path.startswith("/api/"):
+            dispatch_api(self, path, parsed.query)
+            return
+        self.serve_static(path)
+
+    def serve_static(self, path):
+        rel_path = unquote(path or "/")
+        if rel_path in ("", "/"):
+            rel_path = "/index.html"
+        target = (self.server.www_root / rel_path.lstrip("/")).resolve()
+        root = self.server.www_root.resolve()
+        if root != target and root not in target.parents:
+            self.send_error(HTTPStatus.BAD_REQUEST, "Bad request")
+            return
+        if not target.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+            return
+        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        if content_type.startswith("text/") or content_type in {"application/javascript", "application/json"}:
+            content_type = f"{content_type}; charset=utf-8"
+        data_size = target.stat().st_size
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(data_size))
+        self.send_header("Cache-Control", "no-store" if target.name in {"index.html", "app.js", "style.css"} else "public, max-age=3600")
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+        with target.open("rb") as handle:
+            while True:
+                chunk = handle.read(1024 * 256)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+
+
 def main():
-    global BODY
+    global DATA_DIR, CFG_FILE, NAT_STATE_FILE, PORTS_STATE_FILE, HOTSPOT_STATE_FILE
+    global DNSMASQ_CONF_FILE, DNSMASQ_PID_FILE, DNSMASQ_LEASE_FILE
+    parser = argparse.ArgumentParser(description="fn-wifi-hotspot Unix socket server")
+    parser.add_argument("--unix-socket", required=True)
+    parser.add_argument("--base-path", default="/app/fn-wifi-hotspot")
+    parser.add_argument("--www-root", required=True)
+    parser.add_argument("--data-dir", default=DATA_DIR)
+    args = parser.parse_args()
+
+    DATA_DIR = args.data_dir
+    CFG_FILE = os.path.join(DATA_DIR, "hotspot.env")
+    NAT_STATE_FILE = os.path.join(DATA_DIR, "nat.env")
+    PORTS_STATE_FILE = os.path.join(DATA_DIR, "ports.state")
+    HOTSPOT_STATE_FILE = os.path.join(DATA_DIR, "hotspot.state")
+    DNSMASQ_CONF_FILE = os.path.join(DATA_DIR, "hotspot-dnsmasq.conf")
+    DNSMASQ_PID_FILE = os.path.join(DATA_DIR, "hotspot-dnsmasq.pid")
+    DNSMASQ_LEASE_FILE = os.path.join(DATA_DIR, "hotspot-dnsmasq.leases")
     ensure_data_dir()
-    BODY = parse_form_body()
-    action = first_query_value("action")
-    if action.endswith(".cgi"):
-        action = action[:-4]
-    if not action:
-        error_response("400 Bad Request", "missing action")
-    handler = ACTIONS.get(action)
-    if not handler:
-        error_response("404 Not Found", f"unknown action: {action}")
-    handler()
+
+    if os.path.exists(args.unix_socket):
+        os.unlink(args.unix_socket)
+    server = ThreadingUnixHTTPServer(args.unix_socket, Handler, base_path=args.base_path, www_root=args.www_root)
+
+    def shutdown(_signum, _frame):
+        server.server_close()
+        if os.path.exists(args.unix_socket):
+            os.unlink(args.unix_socket)
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+        if os.path.exists(args.unix_socket):
+            os.unlink(args.unix_socket)
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except SystemExit:
-        raise
-    except Exception as exc:
-        error_response("500 Internal Server Error", f"unexpected error (step={CURRENT_STEP}): {exc}")
+    main()

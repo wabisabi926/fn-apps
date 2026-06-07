@@ -2,186 +2,117 @@
 <html lang="zh-CN">
 
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>fn-wifi-hotspot</title>
-  <link rel="stylesheet" href="./style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>无线热点</title>
+  <link rel="stylesheet" href="/app/fn-wifi-hotspot/style.css">
 </head>
 
 <body>
-  <div class="container">
-    <div id="msg" class="msg"></div>
-    <div id="modal" class="modal" role="dialog" aria-modal="true" aria-hidden="true">
-      <div class="backdrop" data-modal-close="1"></div>
-      <div class="panel" role="document">
-        <h3 id="modalTitle" data-i18n="title.confirm">确认</h3>
-        <div id="modalContent" class="content"></div>
-        <div class="actions">
-          <button id="modalCancel" type="button" data-i18n="btn.cancel">取消</button>
-          <button id="modalOk" type="button" data-i18n="btn.continue">继续</button>
-        </div>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <h1 data-i18n="appTitle">无线热点</h1>
+        <p id="statusSummary">正在加载...</p>
       </div>
-    </div>
-    <div class="layout">
-      <div class="stack">
-        <div class="actions">
-          <button id="toggleHotspot" class="toggle" type="button" aria-pressed="false">
-            <span class="switch" aria-hidden="true"><span class="knob"></span></span>
-            <span id="toggleText" data-i18n="toggle.off">热点：关闭</span>
-          </button>
+      <div class="row-actions">
+        <button id="refreshBtn" class="ghost-btn" type="button" data-i18n="refresh">刷新</button>
+        <button id="toggleBtn" class="primary-btn" type="button" disabled>开启热点</button>
+      </div>
+    </header>
 
-          <span class="spacer" aria-hidden="true"></span>
-
-          <select id="langSelect" aria-label="Language" data-i18n-aria-label="aria.langSelect">
-            <option value="zh">中文</option>
-            <option value="en">English</option>
-          </select>
-          <select id="themeSelect" aria-label="Theme" data-i18n-aria-label="aria.themeSelect">
-            <option value="system">跟随系统</option>
-            <option value="light">亮模式</option>
-            <option value="dark">暗模式</option>
-          </select>
+    <main class="content">
+      <section class="panel">
+        <div class="section-head">
+          <h2 data-i18n="status">状态</h2>
         </div>
-        <section class="card config-card">
-          <h2 id="hConfig" data-i18n="section.config">配置</h2>
-          <div class="body">
-            <form id="cfg" class="grid">
-              <div class="section-title" data-i18n="section.net">网卡</div>
-              <label><span data-i18n="label.uplink">共享网卡</span>
-                <select name="uplinkIface" id="uplinkIface">
-                  <option value="" data-i18n="opt.uplinkAuto">自动（系统默认路由）</option>
-                </select>
-              </label>
-              <label><span data-i18n="label.iface">热点网卡</span>
-                <select name="iface" id="iface">
-                  <option value="" data-i18n="opt.ifaceAuto">自动选择</option>
-                </select>
-              </label>
+        <div class="stats-grid">
+          <div class="stat"><span data-i18n="hotspotDevice">热点网卡</span><strong id="statIface">-</strong></div>
+          <div class="stat"><span data-i18n="uplink">共享网卡</span><strong id="statUplink">-</strong></div>
+          <div class="stat"><span data-i18n="address">地址</span><strong id="statIp">-</strong></div>
+          <div class="stat"><span data-i18n="internet">互联网</span><strong id="statInternet">-</strong></div>
+        </div>
+      </section>
 
-              <div class="section-title" data-i18n="section.config">配置</div>
-              <label><span data-i18n="label.ssid">SSID</span>
-                <input name="ssid" autocomplete="off" />
-              </label>
-              <label><span data-i18n="label.password">密码（>=8位）</span>
-                <div class="pw-wrap">
-                  <input name="password" id="password" type="password" />
-                  <button id="pwToggle" class="pw-toggle" type="button" aria-label="显示密码" aria-pressed="false"
-                    data-i18n-aria-label="pw.show">
-                    <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                    <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M3 3l18 18" />
-                      <path d="M10.6 10.6a3 3 0 0 0 4.2 4.2" />
-                      <path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c6.5 0 10 8 10 8a18.3 18.3 0 0 1-4.1 5.3" />
-                      <path d="M6.1 6.1C3.3 8.2 2 12 2 12s3.5 7 10 7c1 0 1.9-.2 2.8-.5" />
-                    </svg>
-                  </button>
-                </div>
-              </label>
-              <label><span data-i18n="label.ipCidr">IP/CIDR</span>
-                <input name="ipCidr" autocomplete="off" placeholder="192.168.12.1/24"
-                  data-i18n-placeholder="placeholder.ipCidr" />
-              </label>
+      <section class="panel">
+        <div class="section-head">
+          <h2 data-i18n="config">配置</h2>
+          <button id="saveBtn" class="primary-btn" type="button" disabled data-i18n="save">保存</button>
+        </div>
+        <form id="configForm" class="grid">
+          <label class="field">
+            <span data-i18n="hotspotDevice">热点网卡</span>
+            <select name="iface" id="ifaceSelect"></select>
+          </label>
+          <label class="field">
+            <span data-i18n="uplink">共享网卡</span>
+            <select name="uplinkIface" id="uplinkSelect"></select>
+          </label>
+          <label class="field">
+            <span>SSID</span>
+            <input name="ssid" autocomplete="off">
+          </label>
+          <label class="field">
+            <span data-i18n="password">密码</span>
+            <input name="password" type="password" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>IP/CIDR</span>
+            <input name="ipCidr" placeholder="192.168.12.1/24" autocomplete="off">
+          </label>
+          <label class="field">
+            <span data-i18n="allowPorts">放行端口</span>
+            <input name="allowPorts" placeholder="80,443,5666,5667,67-68/udp" autocomplete="off">
+          </label>
+          <label class="field">
+            <span data-i18n="country">国家码</span>
+            <select name="countryCode" id="countrySelect"></select>
+          </label>
+          <label class="field">
+            <span data-i18n="band">频段</span>
+            <select name="band">
+              <option value="bg">2.4G</option>
+              <option value="a">5G</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="channel">信道</span>
+            <select name="channel" id="channelSelect"></select>
+          </label>
+          <label class="field">
+            <span data-i18n="width">带宽</span>
+            <select name="channelWidth">
+              <option value="20">20 MHz</option>
+              <option value="40">40 MHz</option>
+              <option value="80">80 MHz</option>
+              <option value="160">160 MHz</option>
+            </select>
+          </label>
+        </form>
+      </section>
 
-              <label><span data-i18n="label.allowPorts">放行端口（供客户端访问主机服务）</span>
-                <input name="allowPorts" autocomplete="off" placeholder="80,443,5666,5667,67-68/udp"
-                  data-i18n-placeholder="placeholder.allowPorts" />
-              </label>
+      <section class="panel">
+        <div class="section-head">
+          <h2 data-i18n="clients">客户端</h2>
+          <span id="clientCount" class="meta">0</span>
+        </div>
+        <div id="clients" class="client-list"></div>
+      </section>
+    </main>
+  </div>
 
-              <div class="section-title" data-i18n="section.wifi">参数</div>
-
-              <label><span data-i18n="label.country">国家码</span>
-                <select name="countryCode" id="countryCode">
-                  <option value="00">00</option>
-                  <option value="CN">CN</option>
-                  <option value="US">US</option>
-                  <option value="JP">JP</option>
-                  <option value="KR">KR</option>
-                  <option value="AU">AU</option>
-                  <option value="CA">CA</option>
-                  <option value="GB">GB</option>
-                  <option value="DE">DE</option>
-                  <option value="FR">FR</option>
-                  <option value="IT">IT</option>
-                  <option value="ES">ES</option>
-                  <option value="NL">NL</option>
-                  <option value="BE">BE</option>
-                  <option value="CH">CH</option>
-                  <option value="AT">AT</option>
-                  <option value="SE">SE</option>
-                  <option value="NO">NO</option>
-                  <option value="DK">DK</option>
-                  <option value="FI">FI</option>
-                  <option value="RU">RU</option>
-                  <option value="IN">IN</option>
-                  <option value="BR">BR</option>
-                  <option value="MX">MX</option>
-                  <option value="AR">AR</option>
-                  <option value="CL">CL</option>
-                  <option value="CO">CO</option>
-                  <option value="PE">PE</option>
-                  <option value="VE">VE</option>
-                  <option value="ZA">ZA</option>
-                  <option value="EG">EG</option>
-                  <option value="NG">NG</option>
-                  <option value="KE">KE</option>
-                  <option value="MA">MA</option>
-                  <option value="TN">TN</option>
-                  <option value="TR">TR</option>
-                  <option value="SA">SA</option>
-                  <option value="AE">AE</option>
-                  <option value="IL">IL</option>
-                  <option value="TH">TH</option>
-                  <option value="MY">MY</option>
-                  <option value="SG">SG</option>
-                  <option value="PH">PH</option>
-                  <option value="ID">ID</option>
-                  <option value="VN">VN</option>
-                  <option value="HK">HK</option>
-                  <option value="TW">TW</option>
-                  <option value="MO">MO</option>
-                </select>
-              </label>
-
-              <label><span data-i18n="label.band">频段</span>
-                <select name="band">
-                  <option value="bg">2.4G(bg)</option>
-                  <option value="a">5G(a)</option>
-                </select>
-              </label>
-              <label><span data-i18n="label.channel">信道</span>
-                <select name="channel" id="channel"></select>
-              </label>
-              <label><span data-i18n="label.width">带宽</span>
-                <select name="channelWidth" id="channelWidth">
-                  <option value="20">20 MHz</option>
-                  <option value="40">40 MHz</option>
-                  <option value="80">80 MHz</option>
-                  <option value="160">160 MHz</option>
-                </select>
-              </label>
-            </form>
-            <div class="actions">
-              <button id="save" data-i18n="btn.save">保存</button>
-            </div>
-          </div>
-        </section>
-
-        <section class="card">
-          <h2 id="hClients" data-i18n="section.clients">客户端</h2>
-          <div class="body">
-            <div id="clients"></div>
-          </div>
-        </section>
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <h2 id="modalTitle"></h2>
+      <div id="modalBody"></div>
+      <div class="modal-actions">
+        <button id="modalCancel" class="ghost-btn" type="button" data-i18n="cancel">取消</button>
+        <button id="modalOk" class="primary-btn" type="button" data-i18n="confirm">确定</button>
       </div>
     </div>
   </div>
-
-  <script src="./app.js"></script>
+  <div id="toast" class="toast hidden"></div>
+  <script src="/app/fn-wifi-hotspot/app.js"></script>
 </body>
 
 </html>
