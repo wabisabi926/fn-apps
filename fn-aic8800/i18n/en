@@ -1,0 +1,11 @@
+[common]
+display_name="aic8800"
+desc="AICSemi/AiKeWei Technology AIC8800 WiFi6 module driver, providing network functionality support for this chip."
+
+[entry]
+title="aic8800"
+
+[wizard]
+install_stepTitle="Install Wizard"
+install_item1_helpText="You are about to install aic8800" 
+install_item2_helpText="1. This driver is compiled locally, it may take some time to install. Please keep your network connection stable."

@@ -1,7 +1,7 @@
 appname               = fn-aic8800
-version               = 1.0.4
-display_name          = aic8800
-desc                  = AICSemi/爱科微科技 AIC8800 芯片的 WiFi6 模组驱动，提供对该芯片的网络功能支持。
+version               = 1.0.5
+display_name          = "${common.display_name}"
+desc                  = "${common.desc}"
 platform              = all
 source                = thirdparty
 maintainer            = Ing

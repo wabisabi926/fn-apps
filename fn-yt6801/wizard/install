@@ -1,18 +1,14 @@
 [
   {
-    "stepTitle": "安装向导",
+    "stepTitle": "${wizard.install_stepTitle}",
     "items": [
       {
         "type": "tips",
-        "helpText": "欢迎使用我们的应用！"
+        "helpText": "${wizard.install_item1_helpText}"
       },
       {
         "type": "tips",
-        "helpText": "<strong>警告：</strong>"
-      },
-      {
-        "type": "tips",
-        "helpText": "1. 本驱动为本地编译安装，可能会花费一些时间; 安装依赖网络，请保持网络畅通。"
+        "helpText": "${wizard.install_item2_helpText}"
       }
     ]
   }

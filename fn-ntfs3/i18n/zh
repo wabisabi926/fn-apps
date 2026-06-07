@@ -1,0 +1,16 @@
+[common]
+display_name="ntfs3"
+desc="ntfs3 驱动是一个用于 Linux 内核的开源 NTFS 文件系统驱动程序，旨在提供对 NTFS 格式化分区的高性能读写支持。"
+
+[entry]
+title="ntfs3"
+
+[wizard]
+install_stepTitle="安装向导"
+install_item1_helpText="您即将安装 ntfs3" 
+install_item2_helpText="1. 本驱动为本地编译安装，可能会花费一些时间; 安装依赖网络，请保持网络畅通。"
+install_item3_helpText="2. 由于默认的 ntfs-3g 驱动已加载，需重启系统才会使用 ntfs3 驱动。"
+install_item4_helpText="3. 内核升级后需重新编译安装本驱动。"
+
+uninstall_stepTitle="卸载向导"
+uninstall_item1_helpText="1. 由于 ntfs3 驱动已加载，需重启系统才会还原默认的 ntfs-3g 驱动。"

@@ -1,14 +1,10 @@
 [
     {
-        "stepTitle": "卸载向导",
+        "stepTitle": "${wizard.uninstall_stepTitle}",
         "items": [
             {
                 "type": "tips",
-                "helpText": "<strong>警告：</strong>"
-            },
-            {
-                "type": "tips",
-                "helpText": "  1. 由于 ntfs3 驱动已加载，需重启系统才会还原默认的 ntfs-3g 驱动。"
+                "helpText": "${wizard.uninstall_item1_helpText}"
             }
         ]
     }

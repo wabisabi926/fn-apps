@@ -1,0 +1,11 @@
+[common]
+display_name="aic8800"
+desc="AICSemi/爱科微科技 AIC8800 芯片的 WiFi6 模组驱动，提供对该芯片的网络功能支持。"
+
+[entry]
+title="aic8800"
+
+[wizard]
+install_stepTitle="安装向导"
+install_item1_helpText="您即将安装 aic8800" 
+install_item2_helpText="1. 本驱动为本地编译安装，可能会花费一些时间; 安装依赖网络，请保持网络畅通。"

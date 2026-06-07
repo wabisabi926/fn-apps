@@ -1,0 +1,11 @@
+[common]
+display_name="yt6801"
+desc="Motorcomm/裕太微 千兆有线网卡 YT6801 驱动，提供对该芯片的网络功能支持。"
+
+[entry]
+title="yt6801"
+
+[wizard]
+install_stepTitle="安装向导"
+install_item1_helpText="您即将安装 yt6801" 
+install_item2_helpText="1. 本驱动为本地编译安装，可能会花费一些时间; 安装依赖网络，请保持网络畅通。"

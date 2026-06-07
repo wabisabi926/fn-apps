@@ -1,0 +1,11 @@
+[common]
+display_name="yt6801"
+desc="Motorcomm/YueTeng YT 6801 network adapter driver."
+
+[entry]
+title="yt6801"
+
+[wizard]
+install_stepTitle="Install Wizard"
+install_item1_helpText="You are about to install yt6801" 
+install_item2_helpText="1. This driver is compiled locally, it may take some time to install. Please keep your network connection stable."

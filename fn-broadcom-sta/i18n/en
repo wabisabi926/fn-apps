@@ -1,0 +1,11 @@
+[common]
+display_name="Broadcom-STA"
+desc="Broadcom STA is a driver for IEEE 802.11a/b/g/n wireless adapters including BCM4311, BCM4312, BCM4313, BCM4321, BCM4322, BCM43142, BCM43224, BCM43225, BCM43227, BCM43228, BCM4331, BCM4360, and BCM4352."
+
+[entry]
+title="Broadcom-STA"
+
+[wizard]
+install_stepTitle="Install Wizard"
+install_item1_helpText="You are about to install Broadcom-STA" 
+install_item2_helpText="1. This driver is compiled locally, it may take some time to install. Please keep your network connection stable."

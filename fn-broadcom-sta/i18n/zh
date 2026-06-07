@@ -1,0 +1,11 @@
+[common]
+display_name="Broadcom-STA"
+desc="Broadcom STA 是 BCM4311-、BCM4312-、BCM4313-、BCM4321-、BCM4322-、BCM43142-、BCM43224-、BCM43225-、BCM43227-、BCM43228-、BCM4331-、BCM4360- 和 BCM4352 等 IEEE 802.11a/b/g/n 无线网卡的驱动程序。"
+
+[entry]
+title="Broadcom-STA"
+
+[wizard]
+install_stepTitle="安装向导"
+install_item1_helpText="您即将安装 Broadcom-STA" 
+install_item2_helpText="1. 本驱动为本地编译安装，可能会花费一些时间; 安装依赖网络，请保持网络畅通。"

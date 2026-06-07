@@ -1,0 +1,16 @@
+[common]
+display_name="ntfs3"
+desc="ntfs3 driver is a Linux kernel module that provides high-performance read/write support for NTFS formatted partitions."
+
+[entry]
+title="ntfs3"
+
+[wizard]
+install_stepTitle="Install Wizard"
+install_item1_helpText="You are about to install ntfs3" 
+install_item2_helpText="1. This driver is compiled and installed locally, which may take some time; installation requires a network connection, please ensure network connectivity."
+install_item3_helpText="2. Since the default ntfs-3g driver is loaded, a system reboot is required to use the ntfs3 driver."
+install_item4_helpText="3. After a kernel upgrade, this driver needs to be recompiled and installed."
+
+uninstall_stepTitle="Uninstall Wizard"
+uninstall_item1_helpText="1. Since the ntfs3 driver is loaded, a system reboot is required to restore the default ntfs-3g driver."
