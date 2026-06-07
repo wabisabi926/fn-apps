@@ -105,9 +105,9 @@ textarea {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 224px minmax(760px, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
   height: 100vh;
-  min-width: 1024px;
+  min-width: 0;
   background: var(--app-bg);
 }
 
@@ -123,18 +123,24 @@ textarea {
 .side-search {
   position: relative;
   display: block;
-  margin-bottom: 14px;
+  margin: 4px 0 12px;
 }
 
 .side-search input {
   width: 100%;
   height: 36px;
   padding: 0 12px 0 34px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: var(--field);
-  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
   outline: none;
+  font-size: 14px;
+}
+
+.side-search input:focus {
+  border-color: var(--line-strong);
+  background: var(--panel);
 }
 
 .side-search input::placeholder {
@@ -143,11 +149,37 @@ textarea {
 
 .search-icon {
   position: absolute;
-  left: 12px;
+  left: 13px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translateY(-50%);
+  color: transparent;
+  pointer-events: none;
+}
+
+.search-icon::before {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  border: 1.6px solid var(--muted-2);
+  border-radius: 50%;
+  content: "";
+}
+
+.search-icon::after {
+  position: absolute;
+  left: 8px;
   top: 8px;
-  color: var(--muted-2);
-  font-size: 18px;
-  line-height: 1;
+  width: 5px;
+  height: 1.6px;
+  border-radius: 999px;
+  background: var(--muted-2);
+  content: "";
+  transform: rotate(45deg);
+  transform-origin: left center;
 }
 
 .footer-action {
@@ -201,7 +233,7 @@ textarea {
 .filter-bar {
   display: flex;
   align-items: center;
-  gap: 56px;
+  gap: clamp(16px, 3vw, 56px);
   padding: 16px 20px;
   border-bottom: 1px solid var(--line);
 }
@@ -209,6 +241,7 @@ textarea {
 .filter-actions {
   margin-left: auto;
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
 }
 
@@ -223,8 +256,10 @@ textarea {
 
 .filter-field {
   display: flex;
+  flex: 1 1 0;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .filter-field span {
@@ -249,7 +284,10 @@ textarea {
 }
 
 .filter-field select {
-  width: 200px;
+  flex: 1 1 140px;
+  width: 100%;
+  min-width: 120px;
+  max-width: 200px;
   padding: 0 34px 0 12px;
 }
 
@@ -297,12 +335,17 @@ textarea {
 
 .app-table th:nth-child(1),
 .app-table td:nth-child(1) {
-  width: 72px;
+  width: 70px;
 }
 
 .app-table th:nth-child(4),
 .app-table td:nth-child(4) {
   width: 96px;
+}
+
+.app-table th:nth-child(5),
+.app-table td:nth-child(5) {
+  width: 128px;
 }
 
 .app-table th:nth-child(6),
@@ -312,7 +355,19 @@ textarea {
 
 .app-table th:nth-child(7),
 .app-table td:nth-child(7) {
-  width: 86px;
+  position: sticky;
+  right: 0;
+  width: 96px;
+  background: var(--panel);
+  white-space: nowrap;
+}
+
+.app-table th:nth-child(7) {
+  z-index: 4;
+}
+
+.app-table td:nth-child(7) {
+  z-index: 1;
 }
 
 .app-table th {
@@ -344,7 +399,22 @@ textarea {
   overflow: visible;
 }
 
+.app-table th:nth-child(3),
+.app-table td:nth-child(3),
+.app-table th:nth-child(4),
+.app-table td:nth-child(4),
+.app-table th:nth-child(5),
+.app-table td:nth-child(5),
+.app-table th:nth-child(6),
+.app-table td:nth-child(6) {
+  white-space: nowrap;
+}
+
 .app-table tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.app-table tbody tr:hover td:nth-child(7) {
   background: var(--row-hover);
 }
 
@@ -374,7 +444,7 @@ textarea {
 }
 
 .app-name {
-  max-width: 280px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -383,7 +453,7 @@ textarea {
 
 .app-id {
   margin-top: 3px;
-  max-width: 280px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -932,7 +1002,7 @@ textarea {
   }
 
   .app-table {
-    min-width: 860px;
+    min-width: 0;
   }
 
   .app-table th,
@@ -994,7 +1064,7 @@ textarea {
   }
 
   .app-table {
-    min-width: 780px;
+    min-width: 0;
   }
 
   .filter-field {

@@ -30,7 +30,7 @@ DEFAULT_SETTINGS = {
     "thirdPartySources": [
         {
             "name": "RROrg",
-            "url": "https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fnpack.json",
+            "url": "https://gh-proxy.com/https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fnpack.json",
             "enabled": True,
         }
     ],

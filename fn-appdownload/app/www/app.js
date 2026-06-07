@@ -403,6 +403,7 @@ function applyPreferences({ rerender = false } = {}) {
     renderSourceList(state.settings.thirdPartySources || []);
     renderRows();
   }
+  return languageChanged;
 }
 
 function authToken() {
