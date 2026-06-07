@@ -1,0 +1,18 @@
+[common]
+display_name="ZeroTier"
+desc="ZeroTier is a decentralized virtual network that connects devices without complex configuration."
+
+[entry]
+title="ZeroTier"
+
+[wizard]
+install_stepTitle="Install Wizard"
+install_item1_helpText="You are about to install ZeroTier" 
+install_item2_helpText="1. Please enter the 16-digit Network ID to join your ZeroTier network."
+
+uninstall_stepTitle="Uninstall Wizard"
+uninstall_item1_helpText="You are about to uninstall this application. Please select how to handle application data:"
+uninstall_item1_label="Data retention options"
+uninstall_item1_options1="Retain data - can be restored during reinstallation! (Recommended)"
+uninstall_item1_options2="Delete data - this operation is irreversible!"
+uninstall_item1_rules="Please select data retention options"

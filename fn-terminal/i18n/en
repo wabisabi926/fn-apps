@@ -1,0 +1,21 @@
+[common]
+display_name="terminal"
+desc="terminal (ttyd + tmux) is a web-based terminal application that allows users to access and manage server terminal sessions through a browser, providing a convenient remote terminal operation experience."
+
+[entry]
+title="terminal"
+
+[wizard]
+config_stepTitle="Configuration Wizard"
+config_item1_helpText="You are about to modify terminal" 
+config_item1_label="Enable login"
+config_item1_options1="Default root user"
+config_item1_options2="Default login user"
+config_item1_rules="Please select whether to enable login"
+
+install_stepTitle="Installation Wizard"
+install_item1_helpText="You are about to install terminal" 
+install_item1_label="Enable login"
+install_item1_options1="Default root user"
+install_item1_options2="Default login user"
+install_item1_rules="Please select whether to enable login"

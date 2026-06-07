@@ -1,0 +1,19 @@
+[common]
+display_name="terminal"
+desc="terminal (ttyd + tmux) 是一个基于 Web 的终端应用程序，允许用户通过浏览器访问和管理服务器终端会话，提供便捷的远程终端操作体验。"
+
+[entry]
+title="terminal"
+
+[wizard]
+config_stepTitle="配置向导"
+config_item1_helpText="您即将修改 terminal" 
+config_item1_label="是否启用登录"
+config_item1_options1="默认 root 用户"
+config_item1_options2="默认 login 登录"
+
+install_stepTitle="安装向导"
+install_item1_helpText="您即将安装 terminal" 
+install_item1_label="是否启用登录"
+install_item1_options1="默认 root 用户"
+install_item1_options2="默认 login 登录"

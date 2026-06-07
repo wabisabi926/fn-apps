@@ -1,23 +1,23 @@
 [
   {
-    "stepTitle": "安装向导",
+    "stepTitle": "${wizard.install_stepTitle}",
     "items": [
       {
         "type": "tips",
-        "helpText": "欢迎使用我们的应用！"
+        "helpText": "${wizard.install_item1_helpText}"
       },
       {
         "type": "radio",
         "field": "wizard_user_login",
-        "label": " 是否启用登录",
+        "label": "${wizard.install_item1_label}",
         "initValue": "root",
         "options": [
           {
-            "label": "默认 root 用户",
+            "label": "${wizard.install_item1_options1}",
             "value": "root"
           },
           {
-            "label": "默认 login 登录",
+            "label": "${wizard.install_item1_options2}",
             "value": "login"
           }
         ]

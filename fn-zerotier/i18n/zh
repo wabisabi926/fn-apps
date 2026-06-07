@@ -1,0 +1,18 @@
+[common]
+display_name="ZeroTier"
+desc="ZeroTier 是一个无中心的虚拟网络，无需配置即可连接设备。"
+
+[entry]
+title="ZeroTier"
+
+[wizard]
+install_stepTitle="安装向导"
+install_item1_helpText="您即将安装 ZeroTier" 
+install_item2_helpText="1. 安装完成后请在应用页面中输入 16 位 Network ID 加入你的 ZeroTier 网络。"
+
+uninstall_stepTitle="卸载向导"
+uninstall_item1_helpText="您即将卸载此应用。请选择如何处理应用数据："
+uninstall_item1_label="数据保留选项"
+uninstall_item1_options1="保留数据 - 重安装时可恢复！（推荐）"
+uninstall_item1_options2="删除数据 - 此操作不可恢复！"
+uninstall_item1_rules="请选择数据保留选项"

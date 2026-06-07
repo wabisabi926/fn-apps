@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ZeroTier 组网</title>
+  <title>ZeroTier</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -12,18 +12,18 @@
   <div class="page-shell">
     <header class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">RRORG</p>
-        <h1>ZeroTier 组网控制台</h1>
+        <p class="eyebrow">ZeroTier</p>
+        <h1 data-i18n="appTitle">ZeroTier 组网控制台</h1>
       </div>
       <div class="hero-actions">
-        <button id="refreshBtn" class="btn btn-primary" type="button">刷新</button>
+        <button id="refreshBtn" class="btn btn-primary" type="button" data-i18n="refresh">刷新</button>
       </div>
     </header>
 
     <main class="layout">
       <section class="panel status-panel">
         <div class="panel-head">
-          <h2>服务状态</h2>
+          <h2 data-i18n="serviceStatus">服务状态</h2>
         </div>
         <div class="stats-grid">
           <div class="stat-card">
@@ -31,15 +31,15 @@
             <strong id="nodeId">-</strong>
           </div>
           <div class="stat-card">
-            <span class="stat-label">版本</span>
+            <span class="stat-label" data-i18n="version">版本</span>
             <strong id="version">-</strong>
           </div>
           <div class="stat-card">
-            <span class="stat-label">系统服务</span>
+            <span class="stat-label" data-i18n="systemService">系统服务</span>
             <strong id="serviceEnabled">-</strong>
           </div>
           <div class="stat-card">
-            <span class="stat-label">在线状态</span>
+            <span class="stat-label" data-i18n="onlineState">在线状态</span>
             <strong id="onlineState">-</strong>
           </div>
         </div>
@@ -47,20 +47,20 @@
 
       <section class="panel network-panel">
         <div class="panel-head">
-          <h2>网络管理</h2>
+          <h2 data-i18n="networkManagement">网络管理</h2>
           <span id="networkCount" class="panel-meta">0 个网络</span>
         </div>
         <div class="panel-stack">
           <div class="panel-block">
             <form id="joinForm" class="join-form">
               <label for="networkId">Network ID</label>
-              <input id="networkId" name="networkId" type="text" maxlength="16" placeholder="例如：8056c2e21c000001"
+              <input id="networkId" name="networkId" type="text" maxlength="16" placeholder="例如：8056c2e21c000001" data-i18n-placeholder="networkPlaceholder"
                 autocomplete="off">
-              <button class="btn btn-primary" type="submit">加入</button>
+              <button class="btn btn-primary" type="submit" data-i18n="join">加入</button>
             </form>
           </div>
           <div class="panel-block">
-            <div id="networksEmpty" class="empty-state">当前还没有加入任何网络。</div>
+            <div id="networksEmpty" class="empty-state" data-i18n="emptyNetworks">当前还没有加入任何网络。</div>
             <div id="networkList" class="network-list"></div>
           </div>
         </div>
@@ -68,7 +68,7 @@
 
       <section class="panel moon-panel">
         <div class="panel-head">
-          <h2>Moon 管理</h2>
+          <h2 data-i18n="moonManagement">Moon 管理</h2>
           <div class="panel-meta-group">
             <span id="createdMoonCount" class="panel-meta">创建 0</span>
             <span id="joinedMoonCount" class="panel-meta">加入 0</span>
@@ -82,8 +82,8 @@
                 <span>Seed</span>
                 <span>Root Identity</span>
                 <span>Stable Endpoints</span>
-                <span>状态</span>
-                <span>操作</span>
+                <span data-i18n="status">状态</span>
+                <span data-i18n="actions">操作</span>
               </div>
               <div class="moon-create-row moon-created-editor-row">
                 <div class="moon-created-col moon-create-col-id">
@@ -103,32 +103,32 @@
                 </div>
                 <div class="moon-created-col moon-create-col-actions">
                   <button id="moonCreateBtn" class="btn btn-primary" type="submit">创建</button>
-                  <button id="moonCreateCancelBtn" class="btn btn-secondary" type="button" hidden>取消</button>
+                  <button id="moonCreateCancelBtn" class="btn btn-secondary" type="button" hidden data-i18n="cancel">取消</button>
                 </div>
               </div>
             </form>
           </div>
           <div class="panel-block">
-            <div id="createdMoonsEmpty" class="empty-state">当前还没有创建任何 Moon。</div>
+            <div id="createdMoonsEmpty" class="empty-state" data-i18n="emptyCreatedMoons">当前还没有创建任何 Moon。</div>
             <div id="createdMoonList" class="moon-list"></div>
           </div>
           <div class="panel-block">
             <form id="moonForm" class="moon-form">
               <div class="field-group">
                 <label for="moonWorldId">World ID</label>
-                <input id="moonWorldId" name="moonWorldId" type="text" maxlength="16" placeholder="例如：ad7592d9dc" autocomplete="off">
+                <input id="moonWorldId" name="moonWorldId" type="text" maxlength="16" placeholder="例如：ad7592d9dc" data-i18n-placeholder="moonWorldPlaceholder" autocomplete="off">
               </div>
               <div class="field-group">
                 <label for="moonSeed">Seed</label>
-                <input id="moonSeed" name="moonSeed" type="text" maxlength="10" placeholder="例如：abcdef1234" autocomplete="off">
+                <input id="moonSeed" name="moonSeed" type="text" maxlength="10" placeholder="例如：abcdef1234" data-i18n-placeholder="moonSeedPlaceholder" autocomplete="off">
               </div>
               <div class="moon-form-actions">
-                <button class="btn btn-primary" type="submit">加入 Moon</button>
+                <button class="btn btn-primary" type="submit" data-i18n="joinMoon">加入</button>
               </div>
             </form>
           </div>
           <div class="panel-block">
-            <div id="joinedMoonsEmpty" class="empty-state">当前还没有加入任何 Moon。</div>
+            <div id="joinedMoonsEmpty" class="empty-state" data-i18n="emptyJoinedMoons">当前还没有加入任何 Moon。</div>
             <div id="joinedMoonList" class="moon-list"></div>
           </div>
         </div>
@@ -136,11 +136,11 @@
 
       <section class="panel peers-panel">
         <div class="panel-head">
-          <h2>Peer 信息</h2>
+          <h2 data-i18n="peerInfo">Peer 信息</h2>
           <span id="peerSummary" class="panel-meta">-</span>
         </div>
         <div id="peerList" class="peer-list">
-          <div class="empty-state">等待加载 Peer 信息。</div>
+          <div class="empty-state" data-i18n="loadingPeers">等待加载 Peer 信息。</div>
         </div>
       </section>
     </main>
