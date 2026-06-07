@@ -8,6 +8,7 @@ import argparse
 import getpass
 import json
 import logging
+import mimetypes
 import os
 import signal
 import socket
@@ -41,7 +42,8 @@ DEFAULT_PORT = 28256
 DEFAULT_SOCKET_PATH = os.path.join(ROOT_DIR, "fn-scheduler.sock")
 DEFAULT_DB_PATH = os.path.join(ROOT_DIR, "scheduler.db")
 DEFAULT_SETTINGS_PATH = os.path.join(ROOT_DIR, "scheduler.settings.json")
-DB_LATEST_VERSION = 2
+DEFAULT_WWW_ROOT = os.path.abspath(os.path.join(ROOT_DIR, "..", "www"))
+DB_LATEST_VERSION = 4
 
 TASK_TIMEOUT = int(os.environ.get("SCHEDULER_TASK_TIMEOUT", "900"))
 CONDITION_TIMEOUT = int(os.environ.get("SCHEDULER_CONDITION_TIMEOUT", "60"))
@@ -541,6 +543,65 @@ class Database:
                         raise
                 cur.execute("PRAGMA user_version=2;")
                 version = 2
+            if version < 3:
+                for statement in (
+                    "ALTER TABLE tasks ADD COLUMN keep_success_log INTEGER NOT NULL DEFAULT 1;",
+                    "ALTER TABLE tasks ADD COLUMN keep_failure_log INTEGER NOT NULL DEFAULT 1;",
+                ):
+                    try:
+                        cur.execute(statement)
+                    except sqlite3.OperationalError as exc:
+                        if "duplicate column name" not in str(exc).lower():
+                            raise
+                cur.execute("PRAGMA user_version=3;")
+                version = 3
+            if version < 4:
+                for statement in (
+                    "ALTER TABLE tasks ADD COLUMN latest_status TEXT;",
+                    "ALTER TABLE tasks ADD COLUMN latest_trigger_reason TEXT;",
+                    "ALTER TABLE tasks ADD COLUMN latest_started_at TEXT;",
+                    "ALTER TABLE tasks ADD COLUMN latest_finished_at TEXT;",
+                ):
+                    try:
+                        cur.execute(statement)
+                    except sqlite3.OperationalError as exc:
+                        if "duplicate column name" not in str(exc).lower():
+                            raise
+                cur.execute(
+                    """
+                    UPDATE tasks
+                    SET
+                        latest_status = (
+                            SELECT status FROM task_results
+                            WHERE task_results.task_id = tasks.id
+                            ORDER BY started_at DESC, id DESC
+                            LIMIT 1
+                        ),
+                        latest_trigger_reason = (
+                            SELECT trigger_reason FROM task_results
+                            WHERE task_results.task_id = tasks.id
+                            ORDER BY started_at DESC, id DESC
+                            LIMIT 1
+                        ),
+                        latest_started_at = (
+                            SELECT started_at FROM task_results
+                            WHERE task_results.task_id = tasks.id
+                            ORDER BY started_at DESC, id DESC
+                            LIMIT 1
+                        ),
+                        latest_finished_at = (
+                            SELECT finished_at FROM task_results
+                            WHERE task_results.task_id = tasks.id
+                            ORDER BY started_at DESC, id DESC
+                            LIMIT 1
+                        )
+                    WHERE EXISTS (
+                        SELECT 1 FROM task_results WHERE task_results.task_id = tasks.id
+                    )
+                    """
+                )
+                cur.execute("PRAGMA user_version=4;")
+                version = 4
             if version < DB_LATEST_VERSION:
                 cur.execute(f"PRAGMA user_version={DB_LATEST_VERSION};")
             self._conn.commit()
@@ -592,11 +653,17 @@ class Database:
                 condition_interval INTEGER NOT NULL DEFAULT 60,
                 event_type TEXT NOT NULL DEFAULT 'script',
                 is_active INTEGER NOT NULL DEFAULT 1,
+                keep_success_log INTEGER NOT NULL DEFAULT 1,
+                keep_failure_log INTEGER NOT NULL DEFAULT 1,
                 pre_task_ids TEXT NOT NULL DEFAULT '[]',
                 script_body TEXT NOT NULL,
                 last_run_at TEXT,
                 next_run_at TEXT,
                 last_condition_check_at TEXT,
+                latest_status TEXT,
+                latest_trigger_reason TEXT,
+                latest_started_at TEXT,
+                latest_finished_at TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -632,6 +699,8 @@ class Database:
     def _row_to_dict(self, row: sqlite3.Row) -> Dict[str, Any]:
         data = dict(row)
         data["is_active"] = bool(data.get("is_active"))
+        data["keep_success_log"] = bool(data.get("keep_success_log", 1))
+        data["keep_failure_log"] = bool(data.get("keep_failure_log", 1))
         data["condition_interval"] = int(data.get("condition_interval", 60))
         data["pre_task_ids"] = json.loads(data.get("pre_task_ids") or "[]")
         data["event_type"] = data.get("event_type") or EVENT_TYPE_SCRIPT
@@ -789,10 +858,11 @@ class Database:
                     """
                     INSERT INTO tasks (
                         name, account, trigger_type, schedule_expression, condition_script,
-                        condition_interval, event_type, is_active, pre_task_ids, script_body,
+                        condition_interval, event_type, is_active, keep_success_log, keep_failure_log,
+                        pre_task_ids, script_body,
                         last_run_at, next_run_at, last_condition_check_at,
                         created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         task["name"],
@@ -803,6 +873,8 @@ class Database:
                         task["condition_interval"],
                         task["event_type"],
                         1 if task["is_active"] else 0,
+                        1 if task["keep_success_log"] else 0,
+                        1 if task["keep_failure_log"] else 0,
                         json.dumps(task["pre_task_ids"]),
                         task["script_body"],
                         task.get("last_run_at"),
@@ -886,7 +958,8 @@ class Database:
                     """
                         UPDATE tasks SET
                             name=?, account=?, trigger_type=?, schedule_expression=?, condition_script=?,
-                            condition_interval=?, event_type=?, is_active=?, pre_task_ids=?, script_body=?,
+                            condition_interval=?, event_type=?, is_active=?, keep_success_log=?, keep_failure_log=?,
+                            pre_task_ids=?, script_body=?,
                             last_run_at=?, next_run_at=?, last_condition_check_at=?, updated_at=?
                         WHERE id=?
                         """,
@@ -899,6 +972,8 @@ class Database:
                         task["condition_interval"],
                         task["event_type"],
                         1 if task["is_active"] else 0,
+                        1 if task["keep_success_log"] else 0,
+                        1 if task["keep_failure_log"] else 0,
                         json.dumps(task["pre_task_ids"]),
                         task["script_body"],
                         task.get("last_run_at"),
@@ -965,23 +1040,73 @@ class Database:
                 """,
                 (task_id, trigger_reason, now),
             )
+            self._update_task_latest_result_locked(
+                task_id, "running", trigger_reason, now, None
+            )
             self._conn.commit()
             return cur.lastrowid
+
+    def _update_task_latest_result_locked(
+        self,
+        task_id: int,
+        status: str,
+        trigger_reason: Optional[str],
+        started_at: Optional[str],
+        finished_at: Optional[str],
+    ) -> None:
+        self._conn.execute(
+            """
+            UPDATE tasks
+            SET latest_status=?,
+                latest_trigger_reason=?,
+                latest_started_at=?,
+                latest_finished_at=?
+            WHERE id=?
+            """,
+            (status, trigger_reason, started_at, finished_at, task_id),
+        )
+
+    def _should_keep_result_record_locked(
+        self, task_id: Optional[int], status: str
+    ) -> bool:
+        if task_id is None:
+            return True
+        cur = self._conn.execute(
+            "SELECT keep_success_log, keep_failure_log FROM tasks WHERE id=?",
+            (task_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return True
+        if status == "success":
+            return bool(row["keep_success_log"])
+        return bool(row["keep_failure_log"])
 
     def finalize_result(self, result_id: int, status: str, log_text: str) -> None:
         now = isoformat(time_now())
         task_id: Optional[int] = None
         with self._lock:
             cur = self._conn.execute(
-                "SELECT task_id FROM task_results WHERE id=?",
+                "SELECT task_id, trigger_reason, started_at FROM task_results WHERE id=?",
                 (result_id,),
             )
             row = cur.fetchone()
-            task_id = int(row[0]) if row else None
-            self._conn.execute(
-                "UPDATE task_results SET status=?, finished_at=?, log=? WHERE id=?",
-                (status, now, log_text, result_id),
-            )
+            if row:
+                task_id = int(row["task_id"])
+                self._update_task_latest_result_locked(
+                    task_id,
+                    status,
+                    row["trigger_reason"],
+                    row["started_at"],
+                    now,
+                )
+            if self._should_keep_result_record_locked(task_id, status):
+                self._conn.execute(
+                    "UPDATE task_results SET status=?, finished_at=?, log=? WHERE id=?",
+                    (status, now, log_text, result_id),
+                )
+            else:
+                self._conn.execute("DELETE FROM task_results WHERE id=?", (result_id,))
             self._conn.commit()
         if task_id is not None:
             self.prune_finished_results(task_id)
@@ -1030,6 +1155,30 @@ class Database:
     def get_latest_result(self, task_id: int) -> Optional[Dict[str, Any]]:
         with self._lock:
             cur = self._conn.execute(
+                """
+                SELECT
+                    latest_status,
+                    latest_trigger_reason,
+                    latest_started_at,
+                    latest_finished_at
+                FROM tasks
+                WHERE id=?
+                """,
+                (task_id,),
+            )
+            task_row = cur.fetchone()
+            if task_row and task_row["latest_status"]:
+                return {
+                    "id": None,
+                    "task_id": task_id,
+                    "status": task_row["latest_status"],
+                    "trigger_reason": task_row["latest_trigger_reason"] or "",
+                    "started_at": task_row["latest_started_at"],
+                    "finished_at": task_row["latest_finished_at"],
+                    "log": None,
+                    "snapshot": True,
+                }
+            cur = self._conn.execute(
                 "SELECT * FROM task_results WHERE task_id=? ORDER BY started_at DESC LIMIT 1",
                 (task_id,),
             )
@@ -1052,6 +1201,33 @@ class Database:
         with self._lock:
             cur = self._conn.execute(
                 """
+                SELECT trigger_reason, started_at
+                FROM task_results
+                WHERE task_id=? AND status='running'
+                ORDER BY started_at DESC, id DESC
+                LIMIT 1
+                """,
+                (task_id,),
+            )
+            latest_running = cur.fetchone()
+            keep_result = self._should_keep_result_record_locked(task_id, "failed")
+            if not keep_result:
+                cur = self._conn.execute(
+                    "DELETE FROM task_results WHERE task_id=? AND status='running'",
+                    (task_id,),
+                )
+                if cur.rowcount > 0 and latest_running:
+                    self._update_task_latest_result_locked(
+                        task_id,
+                        "failed",
+                        latest_running["trigger_reason"],
+                        latest_running["started_at"],
+                        now,
+                    )
+                self._conn.commit()
+                return cur.rowcount
+            cur = self._conn.execute(
+                """
                 UPDATE task_results
                 SET status='failed',
                     finished_at=?,
@@ -1063,6 +1239,14 @@ class Database:
                 """,
                 (now, reason, reason, task_id),
             )
+            if cur.rowcount > 0 and latest_running:
+                self._update_task_latest_result_locked(
+                    task_id,
+                    "failed",
+                    latest_running["trigger_reason"],
+                    latest_running["started_at"],
+                    now,
+                )
             self._conn.commit()
             return cur.rowcount
 
@@ -1147,6 +1331,12 @@ class Database:
             raise ValueError("script body is required")
 
         is_active = parse_bool_value(payload.get("is_active"), default=True)
+        keep_success_log = parse_bool_value(
+            payload.get("keep_success_log"), default=True
+        )
+        keep_failure_log = parse_bool_value(
+            payload.get("keep_failure_log"), default=True
+        )
         schedule_expression_raw = payload.get("schedule_expression")
         schedule_expression = (
             schedule_expression_raw.strip()
@@ -1217,6 +1407,8 @@ class Database:
             "condition_interval": condition_interval,
             "event_type": event_type,
             "is_active": is_active,
+            "keep_success_log": keep_success_log,
+            "keep_failure_log": keep_failure_log,
             "pre_task_ids": pre_task_ids,
             "script_body": script_body,
             "last_run_at": payload.get("last_run_at"),
@@ -1742,12 +1934,14 @@ class SchedulerHTTPServer(ThreadingHTTPServer):
         base_path: str = "/",
         prefer_ipv6: bool = False,
         unix_socket_path: Optional[str] = None,
+        www_root: Optional[str] = None,
         bind_and_activate: bool = True,
     ):
         host = server_address[0] if server_address else ""
         port = server_address[1] if len(server_address) > 1 else 0
 
         self.base_path = base_path or "/"
+        self.www_root = os.path.abspath(www_root or DEFAULT_WWW_ROOT)
 
         # If unix_socket_path is provided, create a UNIX domain socket and
         # initialize the HTTP server without binding/activating the default
@@ -1800,7 +1994,7 @@ class SchedulerRequestHandler(BaseHTTPRequestHandler):
         if self.path.startswith("/api/"):
             self._handle_api("GET")
             return
-        self.send_error(HTTPStatus.NOT_FOUND, "Unsupported path")
+        self._serve_static()
 
     def do_HEAD(self) -> None:  # noqa: N802
         if not self._require_auth():
@@ -1810,7 +2004,7 @@ class SchedulerRequestHandler(BaseHTTPRequestHandler):
         if self.path.startswith("/api/"):
             self.send_error(HTTPStatus.METHOD_NOT_ALLOWED, "HEAD not supported for API")
             return
-        self.send_error(HTTPStatus.NOT_FOUND, "Unsupported path")
+        self._serve_static(head_only=True)
 
     def do_POST(self) -> None:  # noqa: N802
         if not self._require_auth():
@@ -2541,6 +2735,14 @@ class SchedulerRequestHandler(BaseHTTPRequestHandler):
         if base_path in ("", "/"):
             return True
         parsed = urlsplit(self.path)
+        if parsed.path == base_path:
+            location = f"{base_path}/"
+            if parsed.query:
+                location = f"{location}?{parsed.query}"
+            self.send_response(HTTPStatus.MOVED_PERMANENTLY)
+            self.send_header("Location", location)
+            self.end_headers()
+            return False
         if not parsed.path.startswith(base_path):
             self.send_error(HTTPStatus.NOT_FOUND, "Base path mismatch")
             return False
@@ -2550,6 +2752,58 @@ class SchedulerRequestHandler(BaseHTTPRequestHandler):
         rebuilt = parsed._replace(path=stripped_path)
         self.path = urlunsplit(rebuilt)
         return True
+
+    def _serve_static(self, head_only: bool = False) -> None:
+        www_root = getattr(self.server, "www_root", DEFAULT_WWW_ROOT)  # type: ignore[attr-defined]
+        parsed = urlsplit(self.path)
+        request_path = unquote(parsed.path or "/")
+        if request_path in ("", "/"):
+            request_path = "/index.html"
+        elif request_path.endswith("/"):
+            request_path = f"{request_path}index.html"
+
+        rel_path = request_path.lstrip("/")
+        target_path = os.path.abspath(os.path.join(www_root, rel_path))
+        if target_path != www_root and not target_path.startswith(www_root + os.sep):
+            self.send_error(HTTPStatus.FORBIDDEN, "Forbidden")
+            return
+        if not os.path.isfile(target_path):
+            self.send_error(HTTPStatus.NOT_FOUND, "File not found")
+            return
+
+        content_type, _ = mimetypes.guess_type(target_path)
+        if not content_type:
+            content_type = "application/octet-stream"
+        if content_type.startswith("text/") or content_type in {
+            "application/javascript",
+            "application/json",
+            "image/svg+xml",
+        }:
+            content_type = f"{content_type}; charset=utf-8"
+
+        try:
+            file_size = os.path.getsize(target_path)
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(file_size))
+            static_name = os.path.basename(target_path)
+            if static_name == "index.html" or target_path.endswith((".js", ".css")):
+                cache_control = "no-store"
+            else:
+                cache_control = "public, max-age=3600"
+            self.send_header("Cache-Control", cache_control)
+            self.end_headers()
+            if head_only:
+                return
+            with open(target_path, "rb") as f:
+                while True:
+                    chunk = f.read(64 * 1024)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        except OSError as exc:
+            logger.warning("Failed to serve static file %s: %s", target_path, exc)
+            self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, "Failed to read file")
 
 
 ###############################################################################
@@ -2563,9 +2817,13 @@ def run_server(
     prefer_ipv6: bool = False,
     unix_socket: Optional[str] = None,
     settings_path: Optional[str] = None,
+    www_root: Optional[str] = None,
 ) -> None:
     db_path = strip_wrapping_quotes(db_path) or DEFAULT_DB_PATH
     base_path = strip_wrapping_quotes(base_path) or "/"
+    www_root = strip_wrapping_quotes(
+        www_root or os.environ.get("SCHEDULER_WWW_ROOT", DEFAULT_WWW_ROOT)
+    ) or DEFAULT_WWW_ROOT
     settings_path = strip_wrapping_quotes(settings_path) or strip_wrapping_quotes(
         os.environ.get("SCHEDULER_SETTINGS_PATH", DEFAULT_SETTINGS_PATH)
     ) or DEFAULT_SETTINGS_PATH
@@ -2579,8 +2837,7 @@ def run_server(
     handler_class = SchedulerRequestHandler
     normalized_base = normalize_base_path(base_path)
 
-    # Note: authentication and TLS options are intentionally ignored
-    # because front-end (index.cgi) handles authentication and TLS termination.
+    # Authentication and TLS are handled by the application gateway.
     # Use internal defaults for TCP bind if needed; CLI no longer exposes host/port.
     host = DEFAULT_HOST
     port = DEFAULT_PORT
@@ -2591,6 +2848,7 @@ def run_server(
             base_path=normalized_base,
             prefer_ipv6=prefer_ipv6,
             unix_socket_path=unix_socket,
+            www_root=www_root,
             bind_and_activate=False,
         )
     else:
@@ -2599,10 +2857,11 @@ def run_server(
             handler_class,
             base_path=normalized_base,
             prefer_ipv6=prefer_ipv6,
+            www_root=www_root,
         )
     httpd.app_context = ctx  # type: ignore[attr-defined]
 
-    # Setup TLS if needed (not typical for backend service)
+    # Keep a scheme label for startup logs; TLS is terminated by the gateway.
     scheme = "http"
 
     shutdown_event = threading.Event()
@@ -2621,20 +2880,22 @@ def run_server(
 
     if unix_socket:
         logger.info(
-            "Starting scheduler on %s+unix://%s%s (db=%s)",
+            "Starting scheduler on %s+unix://%s%s (db=%s, www=%s)",
             scheme,
             created_unix_socket,
             normalized_base,
             db_path,
+            www_root,
         )
     else:
         logger.info(
-            "Starting scheduler on %s://%s:%s%s (db=%s)",
+            "Starting scheduler on %s://%s:%s%s (db=%s, www=%s)",
             scheme,
             host,
             port,
             normalized_base,
             db_path,
+            www_root,
         )
     engine.start()
     try:
@@ -2677,6 +2938,11 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("SCHEDULER_BASE_PATH", "/"),
         help="Base URL path to mount the scheduler under (default '/')",
     )
+    parser.add_argument(
+        "--www-root",
+        default=os.environ.get("SCHEDULER_WWW_ROOT", DEFAULT_WWW_ROOT),
+        help="Path to the static web root",
+    )
     return parser.parse_args()
 
 
@@ -2688,4 +2954,5 @@ if __name__ == "__main__":
         prefer_ipv6=False,
         unix_socket=args.unix_socket,
         settings_path=args.settings,
+        www_root=args.www_root,
     )

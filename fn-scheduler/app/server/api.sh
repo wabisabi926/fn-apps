@@ -2,7 +2,8 @@
 [ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"
 set -euo pipefail
 
-SOCKET_PATH="${SOCKET_PATH:-/var/apps/fn-scheduler/var/scheduler.sock}"
+SOCKET_PATH="${SOCKET_PATH:-/var/apps/fn-scheduler/target/fn-scheduler.sock}"
+BASE_PATH="${BASE_PATH:-/app/fn-scheduler}"
 TIMEOUT="${TIMEOUT:-8}"
 
 usage() {
@@ -16,7 +17,8 @@ Arguments:
   method     Optional HTTP method. Default: POST when data is provided, otherwise GET
 
 Environment:
-  SOCKET_PATH  Unix socket path (default: /var/apps/fn-scheduler/var/scheduler.sock)
+  SOCKET_PATH  Unix socket path (default: /var/apps/fn-scheduler/target/fn-scheduler.sock)
+  BASE_PATH    URL base path (default: /app/fn-scheduler)
   TIMEOUT      curl max-time in seconds (default: 8)
 
 Examples:
@@ -57,7 +59,9 @@ if [[ ! -S ${SOCKET_PATH} ]]; then
   exit 2
 fi
 
-URL="http://unix/api/${API#/}"
+BASE_PATH="/${BASE_PATH#/}"
+BASE_PATH="${BASE_PATH%/}"
+URL="http://unix${BASE_PATH}/api/${API#/}"
 
 cleanup_file=""
 cleanup() {

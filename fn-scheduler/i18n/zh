@@ -1,0 +1,14 @@
+[common]
+display_name="任务计划"
+desc="轻量级的任务计划应用，支持设置定时任务以自动执行脚本或命令，同时也支持基于条件的任务触发。"
+
+[entry]
+title="任务计划"
+
+[wizard]
+uninstall_stepTitle="卸载向导"
+uninstall_item1_helpText="您即将卸载此应用。请选择如何处理应用数据："
+uninstall_item1_label="数据保留选项"
+uninstall_item1_options1="保留数据 - 重安装时可恢复！（推荐）"
+uninstall_item1_options2="删除数据 - 此操作不可恢复！"
+uninstall_item1_rules="请选择数据保留选项"

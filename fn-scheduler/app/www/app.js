@@ -58,7 +58,6 @@ const elements = {
     '[data-event-subsection="script"]',
   ),
   accountSelect: document.getElementById("accountSelect"),
-  accountStatus: document.getElementById("accountStatus"),
   accountReloadBtn: document.getElementById("btnReloadAccounts"),
   preTaskSelect: document.getElementById("preTaskSelect"),
   preTaskChecklist: document.getElementById("preTaskChecklist"),
@@ -76,34 +75,9 @@ const elements = {
   scheduleInput: document.querySelector('input[name="schedule_expression"]'),
 };
 
-// 计算 API 基础路径：优先使用模块位置（支持通过 index.cgi 加载的情况），
-// 其次回退到 window.location.pathname。若路径包含 index.cgi，则保留到该片段。
-const API_BASE = (function () {
-  try {
-    let basePath = "/";
-    if (typeof import.meta !== 'undefined' && import.meta.url) {
-      try {
-        basePath = new URL('.', import.meta.url).pathname;
-      } catch (e) {
-        basePath = window.location.pathname || '/';
-      }
-    } else {
-      basePath = window.location.pathname || '/';
-    }
-    // 如果路径中包含 index.cgi，确保保留到 index.cgi/ 前缀
-    const idx = basePath.indexOf('index.cgi');
-    if (idx >= 0) {
-      return basePath.slice(0, idx + 'index.cgi'.length) + '/';
-    }
-    if (!basePath.endsWith('/')) {
-      const last = basePath.lastIndexOf('/');
-      basePath = last >= 0 ? basePath.slice(0, last + 1) : '/';
-    }
-    return basePath;
-  } catch (e) {
-    return '/';
-  }
-})();
+const API_BASE = window.location.pathname.startsWith("/app/fn-scheduler")
+  ? "/app/fn-scheduler/"
+  : "./";
 
 let taskTemplates = {};
 
@@ -448,6 +422,7 @@ const buttons = {
   stop: document.getElementById("btnStop"),
   toggle: document.getElementById("btnToggle"),
   results: document.getElementById("btnResults"),
+  about: document.getElementById("btnAbout"),
   settings: document.getElementById("btnSettings"),
   clearResults: document.getElementById("btnClearResults"),
   cronGenerator: document.getElementById("btnCronGenerator"),
@@ -871,7 +846,7 @@ function showConfirm(message, { okText = _t('btn.ok'), cancelText = _t('btn.canc
         <div class="modal-content">
           <div class="modal-header">
             <div><h2></h2></div>
-            <div class="modal-header-actions"><button class="ghost" data-close>&times;</button></div>
+            <div class="modal-header-actions"><button class="icon-btn" data-close type="button" aria-label="${_t('close')}">&times;</button></div>
           </div>
           <div class="modal-body confirm-modal-body"></div>
           <div class="modal-actions confirm-modal-actions">
@@ -985,7 +960,6 @@ function toggleEventInputs() {
 
 function renderAccountOptions(selectedAccount = "") {
   const select = elements.accountSelect;
-  const statusEl = elements.accountStatus;
   const reloadBtn = elements.accountReloadBtn;
   if (!select) { return; }
 
@@ -1004,9 +978,6 @@ function renderAccountOptions(selectedAccount = "") {
     option.selected = true;
     select.appendChild(option);
     select.disabled = true;
-    if (statusEl) {
-      statusEl.textContent = _t('loading_accounts');
-    }
     return;
   }
 
@@ -1018,11 +989,6 @@ function renderAccountOptions(selectedAccount = "") {
     option.selected = true;
     select.appendChild(option);
     select.disabled = true;
-    if (statusEl) {
-      statusEl.textContent = state.posixSupported
-        ? _t('account.not_found_posix')
-        : _t('account.windows_not_detected');
-    }
     return;
   }
 
@@ -1034,9 +1000,6 @@ function renderAccountOptions(selectedAccount = "") {
     option.selected = true;
     select.appendChild(option);
     select.disabled = true;
-    if (statusEl) {
-      statusEl.textContent = "";
-    }
     return;
   }
 
@@ -1068,12 +1031,6 @@ function renderAccountOptions(selectedAccount = "") {
 
   if (!hasSelected && !unavailableSelectedAccount && select.options.length) {
     select.options[0].selected = true;
-  }
-
-  if (statusEl) {
-    statusEl.textContent = unavailableSelectedAccount
-      ? _t('error.task_account_not_allowed', { acc: unavailableSelectedAccount })
-      : "";
   }
 }
 
@@ -1176,6 +1133,8 @@ function openTaskModal(task = null) {
     elements.triggerTypeSelect.value = task.trigger_type;
     elements.eventTypeSelect.value = task.event_type || "system_shutdown";
     elements.taskForm.is_active.checked = Boolean(task.is_active);
+    elements.taskForm.keep_success_log.checked = task.keep_success_log !== false;
+    elements.taskForm.keep_failure_log.checked = task.keep_failure_log !== false;
     if (elements.scheduleInput) {
       elements.scheduleInput.value = task.schedule_expression || "";
     }
@@ -1186,6 +1145,8 @@ function openTaskModal(task = null) {
     elements.taskModalTitle.textContent = _t('modal.task.new');
     elements.eventTypeSelect.value = "system_shutdown";
     elements.taskForm.condition_interval.value = 60;
+    elements.taskForm.keep_success_log.checked = true;
+    elements.taskForm.keep_failure_log.checked = true;
     if (elements.scheduleInput) {
       elements.scheduleInput.value = DEFAULT_SCHEDULE_EXPRESSION;
     }
@@ -1200,6 +1161,8 @@ function collectFormData() {
     account: (elements.accountSelect?.value || "").trim(),
     trigger_type: elements.triggerTypeSelect.value,
     is_active: elements.taskForm.is_active.checked,
+    keep_success_log: elements.taskForm.keep_success_log.checked,
+    keep_failure_log: elements.taskForm.keep_failure_log.checked,
     pre_task_ids: Array.from(elements.preTaskSelect.selectedOptions).map(
       (opt) => Number(opt.value),
     ),
@@ -1784,8 +1747,9 @@ function renderResults(results) {
     const cachedFullLog = state.resultLogCache.get(result.id);
     const isExpanded = typeof cachedFullLog === "string";
     const logText = isExpanded ? cachedFullLog : previewText;
+    const hasLogText = typeof logText === "string" && logText.trim().length > 0;
 
-    if (result.log_truncated || isExpanded) {
+    if (hasLogText && (result.log_truncated || isExpanded)) {
       const logMeta = document.createElement("div");
       logMeta.className = "result-log-meta";
 
@@ -1830,10 +1794,12 @@ function renderResults(results) {
       card.appendChild(logMeta);
     }
 
-    const logEl = document.createElement("pre");
-    logEl.className = "result-log";
-    logEl.textContent = logText;
-    card.appendChild(logEl);
+    if (hasLogText) {
+      const logEl = document.createElement("pre");
+      logEl.className = "result-log";
+      logEl.textContent = logText;
+      card.appendChild(logEl);
+    }
 
     fragment.appendChild(card);
   });
@@ -2034,6 +2000,9 @@ function attachEventListeners() {
 
   bindTaskTemplateSelection();
   bindTemplateManagementEventListeners();
+  buttons.about?.addEventListener("click", () => {
+    openModal(document.getElementById("aboutModal"));
+  });
 }
 // 服务器文件选择：浏览并读取服务器端文件（依赖后端 api/fs 列表与读取接口）
 function openServerFilePicker(defaultPath = '/', options = {}) {
@@ -2255,6 +2224,13 @@ function renderServerFileList(files, parentPath) {
   await loadAccounts({ showError: false });
   await loadTasks();
   startAutoRefresh();
+  window.addEventListener("scheduler:i18nchange", () => {
+    renderTemplateOptions();
+    renderTemplatesTable();
+    renderTasks();
+    updateSortHeaders();
+    updateEventTypeOptionLabels();
+  });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       loadTasks({ silent: true });

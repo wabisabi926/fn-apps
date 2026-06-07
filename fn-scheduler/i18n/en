@@ -1,0 +1,14 @@
+[common]
+display_name="Task Scheduler"
+desc="A lightweight task scheduler for running scripts or commands on schedules and conditional triggers."
+
+[entry]
+title="Task Scheduler"
+
+[wizard]
+uninstall_stepTitle="Uninstall Wizard"
+uninstall_item1_helpText="You are about to uninstall this application. Please select how to handle application data:"
+uninstall_item1_label="Data retention options"
+uninstall_item1_options1="Retain data - can be restored during reinstallation! (Recommended)"
+uninstall_item1_options2="Delete data - this operation is irreversible!"
+uninstall_item1_rules="Please select data retention options"

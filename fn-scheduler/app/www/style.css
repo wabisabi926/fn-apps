@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --bg: #f8fafc;
   --surface: #ffffff;
   --border: #e2e8f0;
@@ -12,6 +13,10 @@
   --success: #10b981;
   --warning: #f59e0b;
   --info: #06b6d4;
+  --button: #eef0f3;
+  --button-hover: #e3e6ea;
+  --button-text: #30343a;
+  --field: #f7f8fa;
   --radius: 8px;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06);
@@ -37,8 +42,8 @@
   --selected-border: rgba(37, 99, 235, 0.9);
 }
 
-/* dark theme overrides (merged) */
-.dark {
+html[data-theme="dark"] {
+  color-scheme: dark;
   /* Visual Studio Dark inspired palette */
   --bg: #1e1e1e;
   --text: #d4d4d4;
@@ -51,6 +56,10 @@
   --primary-dark: #005a9e;
   --danger: #f44747;
   --success: #4caf50;
+  --button: #303133;
+  --button-hover: #38393c;
+  --button-text: #dedfe1;
+  --field: #1f2021;
   --radius: 8px;
   --shadow-sm: none;
   --shadow: none;
@@ -112,20 +121,6 @@ main {
   z-index: 50;
 }
 
-.theme-select,
-.lang-select {
-  color: var(--fg);
-  padding: 6px 8px;
-  border-radius: 6px;
-  width: auto;
-}
-
-.theme-toggle-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 .app-header h1 {
   font-size: 24px;
   font-weight: 700;
@@ -142,15 +137,16 @@ main {
 
 /* 按钮样式 */
 button {
-  border: 1px solid var(--border);
+  min-height: 34px;
+  border: 0;
   border-radius: var(--radius);
-  padding: 10px 12px;
+  padding: 0 14px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
-  background: var(--surface);
-  color: var(--text);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--button);
+  color: var(--button-text);
+  transition: background 0.16s ease, color 0.16s ease, opacity 0.16s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -158,45 +154,36 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  transform: translateY(-1px);
+  background: var(--button-hover);
 }
 
 button.primary {
   background: var(--primary);
-  color: white;
-  border-color: var(--primary);
+  color: #ffffff;
 }
 
 button.primary:hover:not(:disabled) {
   background: var(--primary-dark);
-  border-color: var(--primary-dark);
-  transform: translateY(-1px);
 }
 
 button.danger {
   background: var(--danger);
-  border-color: var(--danger);
-  color: white;
+  color: #ffffff;
 }
 
 button.danger:hover:not(:disabled) {
-  background: #dc2626;
-  border-color: #dc2626;
-  transform: translateY(-1px);
+  opacity: 0.88;
 }
 
 button.ghost:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--text);
+  background: var(--button-hover);
+  color: var(--button-text);
 }
 
 
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  transform: none !important;
 }
 
 /* 统一按钮选中态（用于工具栏按钮、模板页等） */
@@ -246,10 +233,9 @@ button.ghost.selected {
 .toolbar button:not(.primary):not(.danger):not(.ghost):hover:not(:disabled) {
   background: rgba(0, 0, 0, 0.05);
   color: var(--text);
-  transform: translateY(-1px);
 }
 
-.dark .toolbar button:not(.primary):not(.danger):not(.ghost):hover:not(:disabled) {
+html[data-theme="dark"] .toolbar button:not(.primary):not(.danger):not(.ghost):hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -454,7 +440,7 @@ button.ghost.selected {
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(0, 0, 0, 0.58);
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
   display: flex;
@@ -522,6 +508,94 @@ button.ghost.selected {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--field);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--button-hover);
+}
+
+.about-body {
+  display: grid;
+  gap: 12px;
+}
+
+.about-section {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--field);
+}
+
+.about-section h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.about-declaration {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.about-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.about-list li {
+  color: var(--text);
+  line-height: 1.5;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.about-body a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.about-body a:hover {
+  text-decoration: underline;
+}
+
+.about-sponsor-image {
+  width: 100%;
+  max-width: 700px;
+  height: auto;
+  border-radius: 6px;
+}
+
+.about-copyright {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 2px 2px 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 /* 表单网格 */
@@ -1103,13 +1177,43 @@ small {
   margin-right: auto;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  flex-wrap: nowrap;
+  gap: 16px;
+  min-width: 0;
 }
 
-.inline-label {
-  display: flex;
+.modal-actions-left label.switch-option,
+.modal-actions-left label.checkbox-option {
+  display: inline-flex;
+  flex-direction: row;
   align-items: center;
-  gap: 0.5rem;
+  gap: 6px;
+  min-height: 34px;
+  margin-bottom: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.modal-actions-left .switch-option .switch {
+  flex: 0 0 auto;
+}
+
+.modal-actions-left .switch-option>span:not(.switch),
+.modal-actions-left .checkbox-option>span {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.modal-actions-left .checkbox-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--primary);
 }
 
 .pad-1 {
@@ -1195,11 +1299,6 @@ small {
   min-width: 220px;
 }
 
-/* 略微加深模态遮罩以提升可读性 */
-.modal {
-  background: rgba(15, 23, 42, 0.6);
-}
-
 /* 让表头在模态内滚动时保持可见 */
 .simple-table thead th {
   position: sticky;
@@ -1268,6 +1367,15 @@ small {
 }
 
 @media (max-width: 480px) {
+  .modal-actions {
+    flex-wrap: wrap;
+  }
+
+  .modal-actions-left {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
   button {
     padding: 8px 12px;
     font-size: 13px;

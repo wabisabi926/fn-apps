@@ -2,6 +2,7 @@
 
 LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
+SOCKET_PATH="${TRIM_APPDEST}/fn-scheduler.sock"
 
 # write the command to start your program here
 PYTHON_BIN="${PYTHON_BIN:-python3}"
@@ -15,7 +16,15 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 #     # deactivate                                       # deactivate virtual environment
 # fi
 
-CMD="\"${PYTHON_BIN}\" \"${TRIM_APPDEST}/server/scheduler.py\" --unix-socket \"${TRIM_PKGVAR}/scheduler.sock\" --db \"${TRIM_PKGVAR}/scheduler.db\" --settings \"${TRIM_PKGVAR}/scheduler.settings.json\""
+CMD=(
+  "${PYTHON_BIN}"
+  "${TRIM_APPDEST}/server/scheduler.py"
+  --unix-socket "${SOCKET_PATH}"
+  --base-path "/app/fn-scheduler"
+  --www-root "${TRIM_APPDEST}/www"
+  --db "${TRIM_PKGVAR}/scheduler.db"
+  --settings "${TRIM_PKGVAR}/scheduler.settings.json"
+)
 
 log_msg() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >>${LOG_FILE}
@@ -26,9 +35,16 @@ start_process() {
     return 0
   fi
 
+  mkdir -p "${TRIM_PKGVAR}"
+  rm -f "${SOCKET_PATH}"
+
   log_msg "Starting process ..."
   # run cmd to start process
-  bash -c "${CMD}" >>${LOG_FILE} 2>&1 &
+  if command -v setsid >/dev/null 2>&1; then
+    setsid "${CMD[@]}" >>${LOG_FILE} 2>&1 &
+  else
+    nohup "${CMD[@]}" >>${LOG_FILE} 2>&1 &
+  fi
   # write pid to pidfile
   printf "%s" "$!" >${PID_FILE}
   # log_msg "CMD = ${CMD}"
@@ -46,6 +62,7 @@ stop_process() {
     if ! check_process "${pid}"; then
       # process not exist, delete pidfile
       rm -f "${PID_FILE}"
+      rm -f "${SOCKET_PATH}"
       log_msg "remove pid file 1"
       return
     fi
@@ -65,9 +82,11 @@ stop_process() {
       kill -KILL "${pid}"
       sleep 1
       rm -f "${PID_FILE}"
+      rm -f "${SOCKET_PATH}"
     else
       log_msg "process killed... "
       rm -f "${PID_FILE}"
+      rm -f "${SOCKET_PATH}"
     fi
   fi
 
@@ -91,6 +110,7 @@ status() {
     else
       # Process is not running but pidfile exists - clean it up
       rm -f "${PID_FILE}"
+      rm -f "${SOCKET_PATH}"
     fi
   fi
 
