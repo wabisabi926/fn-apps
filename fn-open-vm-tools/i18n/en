@@ -1,0 +1,11 @@
+[common]
+display_name="open-vm-tools"
+desc="Open-VM-Tools is an open source replacement for VMware Tools, improving VMware virtual machine performance and usability."
+
+[entry]
+title="open-vm-tools"
+
+[wizard]
+install_stepTitle="Installation Wizard"
+install_item1_helpText="You are about to install open-vm-tools" 
+install_item2_helpText="1. This program will install VMware Tools, please ensure your virtual machine can access the internet."

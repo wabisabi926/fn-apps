@@ -1,0 +1,11 @@
+[common]
+display_name="qemu-ga"
+desc="QEMU Guest Agent is a daemon running inside the virtual machine, designed to perform a series of operations by interacting with the virtualization host to enhance virtual machine management capabilities."
+
+[entry]
+title="qemu-ga"
+
+[wizard]
+install_stepTitle="Installation Wizard"
+install_item1_helpText="You are about to install qemu-ga" 
+install_item2_helpText="1. This program will install QEMU Guest Agent, please ensure your virtual machine can access the internet."
