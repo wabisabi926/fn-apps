@@ -1,14 +1,14 @@
 [
   {
-    "stepTitle": "安装向导",
+    "stepTitle": "${wizard.install_stepTitle}",
     "items": [
       {
         "type": "tips",
-        "helpText": "欢迎使用我们的应用！"
+        "helpText": "${wizard.install_item1_helpText}"
       },
       {
         "type": "tips",
-        "helpText": "客户端下载地址：<a href=\"https://www.virtualhere.com/usb_client_software\" target=\"_blank\">https://www.virtualhere.com/usb_client_software</a>"
+        "helpText": "${wizard.install_item2_helpText}"
       }
     ]
   }

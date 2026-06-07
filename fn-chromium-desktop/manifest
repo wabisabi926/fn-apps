@@ -1,7 +1,7 @@
 appname               = fn-chromium-desktop
-version               = 1.0.0
-display_name          = chromium-desktop
-desc                  = Chromium-desktop 是一个基于 KMS/DRM 的网页浏览器及音频支持，旨在本地显示器提供浏览器功能。
+version               = 1.0.1
+display_name          = "${common.display_name}"
+desc                  = "${common.desc}"
 platform              = all
 source                = thirdparty
 desktop_uidir         = ui

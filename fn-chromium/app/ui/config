@@ -1,8 +1,7 @@
 {
   ".url": {
     "fn-chromium.Application": {
-      "title": "Chromium",
-      "desc": "Chromium",
+      "title": "${entry.title}",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
       "url": "/chromium/",

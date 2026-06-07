@@ -1,0 +1,27 @@
+[common]
+display_name="chromium"
+desc="Chromium is an open-source web browser project aimed at providing users with a safer, faster, and more stable browsing experience."
+
+[entry]
+title="Chromium"
+
+[wizard]
+install_stepTitle="Install Wizard"
+install_item1_helpText="You are about to install chromium" 
+install_item1_label="Username"
+install_item1_required="Please enter the administrator username"
+install_item1_rules="The username can only contain letters, numbers, and underscores"
+install_item2_label="Password"
+install_item2_required="Please enter the administrator password"
+install_item2_rules="Password must be at least 4 characters long"
+install_item3_label="Base WebUI Type"
+install_item3_options1="selkies - New (Recommended)"
+install_item3_options2="kasmvnc - Old"
+install_item3_rules="Please select a Base WebUI Type"
+
+uninstall_stepTitle="Uninstall Wizard"
+uninstall_item1_helpText="You are about to uninstall this application. Please select how to handle application data:"
+uninstall_item1_label="Data retention options"
+uninstall_item1_options1="Retain data - can be restored during reinstallation! (Recommended)"
+uninstall_item1_options2="Delete data - this operation is irreversible!"
+uninstall_item1_rules="Please select data retention options"

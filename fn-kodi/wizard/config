@@ -1,35 +1,35 @@
 [
   {
-    "stepTitle": "配置向导",
+    "stepTitle": "${wizard.config_stepTitle}",
     "items": [
       {
         "type": "tips",
-        "helpText": "欢迎使用我们的应用！"
+        "helpText": "${wizard.config_item1_helpText}"
       },
       {
         "type": "tips",
-        "helpText": "1. 启用本程序将直接接管物理设备（显示器、音频设备、键盘、鼠标），停用此程序即可释放这些设备。"
+        "helpText": "${wizard.config_item2_helpText}"
       },
       {
         "type": "tips",
-        "helpText": "2. Kodi 控制 界面的默认用户名和密码为 <strong>kodi:kodi</strong>，请在首次登录后前往设置页面修改。"
+        "helpText": "${wizard.config_item3_helpText}"
       },
       {
         "type": "tips",
-        "helpText": "3. 遥控器：<br/>  * Cast Kodi（浏览器扩展）<br/>  * Kore（Android 应用）<br/>  * SYBU for Kodi（iOS 应用）<br/>"
+        "helpText": "${wizard.config_item4_helpText}"
       },
       {
         "type": "radio",
         "field": "wizard_airplay_support",
-        "label": "是否需要支持 UPnP/DLNA 及 AirPlay, 以便通过局域网投屏.",
+        "label": "${wizard.config_item1_label}",
         "initValue": "bridge",
         "options": [
           {
-            "label": "是 (host)",
+            "label": "${wizard.config_item1_options1}",
             "value": "host"
           },
           {
-            "label": "否 (bridge)",
+            "label": "${wizard.config_item1_options2}",
             "value": "bridge"
           }
         ]

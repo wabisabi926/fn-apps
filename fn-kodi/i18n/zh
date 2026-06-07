@@ -1,0 +1,33 @@
+[common]
+display_name="kodi"
+desc="Kodi 是一个免费且开源的媒体播放器软件，用于播放视频、音频和图像。"
+
+[entry]
+title="Kodi 控制"
+
+[wizard]
+config_stepTitle="配置向导"
+config_item1_helpText="您即将修改 kodi" 
+config_item2_helpText="1. 本程序将直接调用物理设备（显示器、音频设备、键盘、鼠标），停用此程序即可释放这些设备。"
+config_item3_helpText="2. Kodi 控制 界面的默认用户名和密码为 <strong>kodi:kodi</strong>，请在首次登录后前往设置页面修改。"
+config_item4_helpText="3. 遥控器：<br/>  * Cast Kodi（浏览器扩展）<br/>  * Kore（Android 应用）<br/>  * SYBU for Kodi（iOS 应用）<br/>"
+config_item1_label="是否需要支持 UPnP/DLNA 及 AirPlay, 以便通过局域网投屏"
+config_item1_options1="是 (host)"
+config_item1_options2="否 (bridge)"
+
+install_stepTitle="安装向导"
+install_item1_helpText="您即将安装 kodi" 
+install_item2_helpText="1. 本程序将直接调用物理设备（显示器、音频设备、键盘、鼠标），停用此程序即可释放这些设备。"
+install_item3_helpText="2. Kodi 控制 界面的默认用户名和密码为 <strong>kodi:kodi</strong>，请在首次登录后前往设置页面修改。"
+install_item4_helpText="3. 遥控器：<br/>  * Cast Kodi（浏览器扩展）<br/>  * Kore（Android 应用）<br/>  * SYBU for Kodi（iOS 应用）<br/>"
+install_item1_label="是否需要支持 UPnP/DLNA 及 AirPlay, 以便通过局域网投屏"
+install_item1_options1="是 (host)"
+install_item1_options2="否 (bridge)"
+
+uninstall_stepTitle="卸载向导"
+uninstall_item1_helpText="您即将卸载此应用。请选择如何处理应用数据："
+uninstall_item1_label="数据保留选项"
+uninstall_item1_options1="保留数据 - 重安装时可恢复！（推荐）"
+uninstall_item1_options2="删除数据 - 此操作不可恢复！"
+uninstall_item1_rules="请选择数据保留选项"
+

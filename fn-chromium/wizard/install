@@ -1,61 +1,61 @@
 [
   {
-    "stepTitle": "安装向导",
+    "stepTitle": "${wizard.install_stepTitle}",
     "items": [
       {
         "type": "tips",
-        "helpText": "欢迎使用我们的应用！"
+        "helpText": "${wizard.install_item1_helpText}"
       },
       {
         "type": "text",
         "field": "wizard_username",
-        "label": "账号",
+        "label": "${wizard.install_item1_label}",
         "initValue": "admin",
         "rules": [
           {
             "required": true,
-            "message": "请输入管理员账号"
+            "message": "${wizard.install_item1_required}"
           },
           {
             "pattern": "^[a-zA-Z0-9_]+$",
-            "message": "账号只能包含字母、数字和下划线"
+            "message": "${wizard.install_item1_rules}"
           }
         ]
       },
       {
         "type": "password",
         "field": "wizard_password",
-        "label": "密码",
+        "label": "${wizard.install_item2_label}",
         "rules": [
           {
             "required": true,
-            "message": "请输入管理员密码"
+            "message": "${wizard.install_item2_required}"
           },
           {
             "min": 4,
-            "message": "密码长度不能少于4位"
+            "message": "${wizard.install_item2_rules}"
           }
         ]
       },
       {
         "type": "radio",
         "field": "wizard_base",
-        "label": "Base WebUI 类型",
+        "label": "${wizard.install_item3_label}",
         "initValue": "latest",
         "options": [
           {
-            "label": "selkies - 新（推荐）",
+            "label": "${wizard.install_item3_options1}",
             "value": "latest"
           },
           {
-            "label": "kasmvnc - 旧",
+            "label": "${wizard.install_item3_options2}",
             "value": "kasm"
           }
         ],
         "rules": [
           {
             "required": true,
-            "message": "请选择 Base WebUI 类型"
+            "message": "${wizard.install_item3_rules}"
           }
         ]
       }

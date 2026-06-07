@@ -1,8 +1,7 @@
 {
   ".url": {
     "fn-chromium-desktop.Application": {
-      "title": "Chromium-Desktop",
-      "desc": "Chromium-Desktop",
+      "title": "${entry.title}",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
       "protocol": "http",

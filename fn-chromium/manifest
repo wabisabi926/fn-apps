@@ -1,7 +1,7 @@
 appname               = fn-chromium
-version               = 1.0.2
-display_name          = chromium
-desc                  = Chromium 是一个开源的网页浏览器项目，旨在为用户提供更安全、更快速和更稳定的浏览体验。
+version               = 1.0.3
+display_name          = "${common.display_name}"
+desc                  = "${common.desc}"
 platform              = all
 source                = thirdparty
 desktop_uidir         = ui

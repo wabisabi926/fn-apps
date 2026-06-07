@@ -1,0 +1,12 @@
+[common]
+display_name="VirtualHereServer"
+desc="VirtualHere USB server for remotely accessing USB devices over the network."
+
+[entry]
+title="VirtualHereServer"
+
+
+[wizard]
+install_stepTitle="Installation Wizard"
+install_item1_helpText="You are about to install VirtualHereServer" 
+install_item2_helpText="1. Client address: <a href=\"https://www.virtualhere.com/usb_client_software\" target=\"_blank\">https://www.virtualhere.com/usb_client_software</a>"

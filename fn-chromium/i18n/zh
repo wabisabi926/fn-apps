@@ -1,0 +1,27 @@
+[common]
+display_name="chromium"
+desc="Chromium 是一个开源的网页浏览器项目，旨在为用户提供更安全、更快速和更稳定的浏览体验。"
+
+[entry]
+title="Chromium"
+
+[wizard]
+install_stepTitle="安装向导"
+install_item1_helpText="您即将安装 chromium" 
+install_item1_label="账号"
+install_item1_required="请输入管理员账号"
+install_item1_rules="账号只能包含字母、数字和下划线"
+install_item2_label="密码"
+install_item2_required="请输入管理员密码"
+install_item2_rules="密码长度不能少于4位"
+install_item3_label="Base WebUI 类型"
+install_item3_options1="selkies - 新（推荐）"
+install_item3_options2="kasmvnc - 旧"
+install_item3_rules="请选择 Base WebUI 类型"
+
+uninstall_stepTitle="卸载向导"
+uninstall_item1_helpText="您即将卸载此应用。请选择如何处理应用数据："
+uninstall_item1_label="数据保留选项"
+uninstall_item1_options1="保留数据 - 重安装时可恢复！（推荐）"
+uninstall_item1_options2="删除数据 - 此操作不可恢复！"
+uninstall_item1_rules="请选择数据保留选项"

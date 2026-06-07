@@ -1,0 +1,12 @@
+[common]
+display_name="VirtualHereServer"
+desc="VirtualHere USB 服务端，支持通过网络远程访问 USB 设备。"
+
+[entry]
+title="VirtualHereServer"
+
+
+[wizard]
+install_stepTitle="安装向导"
+install_item1_helpText="您即将安装 VirtualHereServer" 
+install_item2_helpText="1. 客户端下载地址：<a href=\"https://www.virtualhere.com/usb_client_software\" target=\"_blank\">https://www.virtualhere.com/usb_client_software</a>"

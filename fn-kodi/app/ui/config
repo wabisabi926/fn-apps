@@ -1,8 +1,7 @@
 {
   ".url": {
     "fn-kodi.Application": {
-      "title": "Kodi 控制",
-      "desc": "Kodi 控制",
+      "title": "${entry.title}",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
       "protocol": "http",
