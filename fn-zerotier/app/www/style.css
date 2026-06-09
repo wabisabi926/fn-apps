@@ -124,6 +124,7 @@ textarea {
   gap: 8px;
 }
 
+.network-table-col-actions,
 .moon-created-col-actions,
 .moon-create-col-actions {
   justify-content: flex-end;
@@ -375,7 +376,7 @@ textarea {
 .network-table-header,
 .network-table-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.2fr) minmax(0, 0.65fr) minmax(0, 0.75fr) minmax(0, 1.5fr) minmax(0, 0.7fr) minmax(0, 1.8fr) minmax(0, 0.75fr);
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.5fr) minmax(0, 0.5fr) minmax(0, 0.5fr) minmax(0, 0.5fr) minmax(0, 0.7fr) minmax(0, 2fr) minmax(0, 1fr);
   gap: 8px;
   align-items: center;
 }
@@ -385,7 +386,7 @@ textarea {
 .moon-create-header,
 .moon-create-row {
   display: grid;
-  grid-template-columns: minmax(140px, 0.9fr) minmax(90px, 0.55fr) minmax(360px, 3fr) minmax(260px, 1.8fr) 72px 360px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.5fr) minmax(0, 2fr) minmax(0, 1fr) 64px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
 }
@@ -445,6 +446,8 @@ textarea {
 .network-table-col-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .moon-created-editor-row {
