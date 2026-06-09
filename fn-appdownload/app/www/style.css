@@ -983,6 +983,8 @@ textarea {
 
   .filter-field select {
     width: 100%;
+    flex: 0 0 auto;
+    max-width: none;
   }
 
   .filter-actions {
@@ -1074,6 +1076,8 @@ textarea {
 
   .filter-field select {
     width: 100%;
+    flex: 0 0 auto;
+    max-width: none;
   }
 
   .pager-bar {
