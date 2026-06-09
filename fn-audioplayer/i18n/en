@@ -1,0 +1,6 @@
+[common]
+display_name="Audio Player"
+desc="Audio player application for playing audio files. Supports formats including mp3, wav, ogg, flac, m4a, etc."
+
+[entry]
+title="Audio Player"

@@ -1,0 +1,27 @@
+{
+  ".url": {
+    "fn-audioplayer.Application": {
+      "title": "${entry.title}",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "url": "/app/fn-audioplayer",
+      "gatewaySocket": "fn-audioplayer.sock",
+      "gatewayPrefix": "/app/fn-audioplayer",
+      "allUsers": true,
+      "control": {
+        "accessPerm": "readonly",
+        "fullUrlPerm": "readonly"
+      },
+      "fileTypes": [
+        "mp3",
+        "wav",
+        "flac",
+        "ogg",
+        "m4a",
+        "aac",
+        "wma",
+        "ape"
+      ]
+    }
+  }
+}
