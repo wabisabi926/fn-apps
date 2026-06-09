@@ -402,7 +402,8 @@ button, input, select, textarea { font: inherit; }
 
 .cpu-title {
   display: grid;
-  grid-template-columns: minmax(100px, 180px) minmax(220px, 1fr) max-content;
+  grid-template-columns: minmax(80px, 1fr) minmax(0, 1fr) max-content;
+  gap: 6px;
 }
 
 .data-meta {
@@ -564,6 +565,8 @@ button, input, select, textarea { font: inherit; }
   .grid { grid-template-columns: 1fr; }
   .identity-row { align-items: stretch; flex-direction: column; }
   .switch-field { margin-left: 0; justify-content: flex-start; }
+  .cpu-title { grid-template-columns: 1fr; gap: 4px; }
+  .cpu-title .data-meta { word-break: break-all; }
   .modal { padding: 12px; }
   .modal-content { width: min(760px, calc(100vw - 24px)); max-height: 92vh; padding: 14px; }
 }
