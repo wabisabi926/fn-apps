@@ -1,9 +1,0 @@
-#!/bin/bash
-
-### This script is called before the user installs the application.
-
-apt update
-apt install -y --no-install-recommends libdrm-tests
-[ $? -ne 0 ] && echo "Failed to install libdrm-tests package." >$TRIM_TEMP_LOGFILE && exit 1
-
-exit 0
