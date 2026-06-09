@@ -3,7 +3,7 @@
 ### This script is called before the user upgrades the application.
 
 apt update
-apt upgrade -y qemu-guest-agent
+apt install --only-upgrade -y qemu-guest-agent
 [ $? -ne 0 ] && echo "Failed to upgrade qemu-guest-agent package." >$TRIM_TEMP_LOGFILE && exit 1
 
 exit 0
