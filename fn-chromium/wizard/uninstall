@@ -9,22 +9,22 @@
       {
         "type": "radio",
         "field": "wizard_data_action",
-        "label": "${wizard.uninstall_item2_label}",
+        "label": "${wizard.uninstall_item1_label}",
         "initValue": "keep",
         "options": [
           {
-            "label": "${wizard.uninstall_item2_options1}",
+            "label": "${wizard.uninstall_item1_options1}",
             "value": "keep"
           },
           {
-            "label": "${wizard.uninstall_item2_options2}",
+            "label": "${wizard.uninstall_item1_options2}",
             "value": "delete"
           }
         ],
         "rules": [
           {
             "required": true,
-            "message": "${wizard.uninstall_item2_required}"
+            "message": "${wizard.uninstall_item1_required}"
           }
         ]
       }
