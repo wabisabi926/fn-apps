@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>存储池管理</title>
+  <title data-i18n="appTitle">存储池管理</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <div class="page">
     <header class="topbar">
       <div class="topbar-main">
-        <h1>存储池管理</h1>
-        <p class="subtitle">磁盘 / 卷管理</p>
+        <h1 data-i18n="appTitle">存储池管理</h1>
+        <p class="subtitle" data-i18n="subtitle">磁盘 / 卷管理</p>
       </div>
       <div class="topbar-actions">
-        <button id="assembleBtn" class="btn primary">扫描并组装</button>
+        <button id="assembleBtn" class="btn primary" data-i18n="scanAndAssemble">扫描并组装</button>
       </div>
     </header>
 
@@ -24,19 +24,19 @@
 
     <section class="panel compact-panel">
       <div class="section-head">
-        <h2>磁盘</h2>
+        <h2 data-i18n="disks">磁盘</h2>
         <span id="inventoryMeta" class="section-meta"></span>
       </div>
-      <div id="inventoryEmpty" class="empty">暂未读取到磁盘分区信息。</div>
+      <div id="inventoryEmpty" class="empty" data-i18n="noDiskInfo">暂未读取到磁盘分区信息。</div>
       <div id="inventoryTableWrap" class="table-wrap hidden"></div>
     </section>
 
     <section class="panel compact-panel">
       <div class="section-head">
-        <h2>卷</h2>
+        <h2 data-i18n="volumes">卷</h2>
         <span id="volumeMeta" class="section-meta"></span>
       </div>
-      <div id="volumeEmpty" class="empty">暂未发现可挂载或已挂载的卷。</div>
+      <div id="volumeEmpty" class="empty" data-i18n="noVolumeInfo">暂未发现可挂载或已挂载的卷。</div>
       <div id="volumeTableWrap" class="table-wrap hidden"></div>
     </section>
   </div>

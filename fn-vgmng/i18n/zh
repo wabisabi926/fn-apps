@@ -1,0 +1,6 @@
+[common]
+display_name="存储池管理"
+desc="存储池管理, 支持非飞牛存储池(其他NAS系统存储池)的管理。"
+
+[entry]
+title="存储池管理"

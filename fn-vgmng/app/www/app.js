@@ -3,9 +3,255 @@ const API_ENDPOINT = `${CGI_BASE_PATH}api.cgi`;
 const SUPPORTED_FILESYSTEMS = new Set(['btrfs', 'ext4', 'ext3', 'ext2', 'xfs', 'ntfs', 'ntfs3', 'exfat', 'vfat']);
 const RECOGNIZED_UNMOUNTABLE_FILESYSTEMS = new Set(['swap']);
 
+const I18N = {
+  'zh-CN': {
+    appTitle: '存储池管理',
+    subtitle: '磁盘 / 卷管理',
+    scanAndAssemble: '扫描并组装',
+    disks: '磁盘',
+    volumes: '卷',
+    noDiskInfo: '暂未读取到磁盘分区信息。',
+    noVolumeInfo: '暂未发现可挂载或已挂载的卷。',
+    diskStat: '磁盘',
+    partitionStat: '分区',
+    mountableVolStat: '可挂载卷',
+    mountedVolStat: '已挂载卷',
+    mounted: '已挂载',
+    mountable: '可挂载',
+    lvmPV: 'LVM 物理卷',
+    raidMember: 'RAID 成员',
+    hasImportedVol: '已有导入卷',
+    foundMountableVol: '发现可挂载卷',
+    disk: '磁盘',
+    noPartition: '无分区',
+    diskOnly: '仅检测到整盘',
+    canFormVol: '可形成卷',
+    unmountable: '不可挂载',
+    recognized: '已识别',
+    readOnly: '只读',
+    readWrite: '读写',
+    mountRO: '只读',
+    mountRW: '读写',
+    unmount: '卸载',
+    thAutoMount: '自动挂载',
+    thDevice: '设备',
+    thLabel: '标签',
+    thPartId: '分区 ID',
+    thCapacity: '容量',
+    thFilesystem: '文件系统',
+    thStatus: '状态',
+    thMountPoint: '挂载位置',
+    thVolDevice: '卷设备',
+    thRelatedPart: '关联分区',
+    thAction: '操作',
+    partition: '分区',
+    diskMeta: '{n} 块磁盘，{m} 个分区',
+    volumeMeta: '{n} 个卷',
+    mountedMode: '已挂载({mode})',
+    activateDone: '扫描并组装完成',
+    mountRWDone: '卷已按读写方式挂载',
+    mountRODone: '卷已按只读方式挂载',
+    unmountDone: '卷已卸载',
+    autoMountOff: '已关闭自动挂载',
+    autoMountOn: '已开启自动挂载',
+    actionDone: '操作完成',
+    statusRefreshed: '状态已刷新',
+    fetchFailed: '获取状态失败（HTTP {status}）',
+    requestFailed: '请求失败（HTTP {status}）',
+    actionFailed: '操作失败',
+  },
+  'en-US': {
+    appTitle: 'Volume Manager',
+    subtitle: 'Disk / Volume Management',
+    scanAndAssemble: 'Scan & Assemble',
+    disks: 'Disks',
+    volumes: 'Volumes',
+    noDiskInfo: 'No disk partition information available.',
+    noVolumeInfo: 'No mountable or mounted volumes found.',
+    diskStat: 'Disks',
+    partitionStat: 'Partitions',
+    mountableVolStat: 'Mountable',
+    mountedVolStat: 'Mounted',
+    mounted: 'Mounted',
+    mountable: 'Mountable',
+    lvmPV: 'LVM PV',
+    raidMember: 'RAID Member',
+    hasImportedVol: 'Has imported vol',
+    foundMountableVol: 'Mountable vol found',
+    disk: 'Disk',
+    noPartition: 'No partition',
+    diskOnly: 'Whole disk only',
+    canFormVol: 'Can form vol',
+    unmountable: 'Unmountable',
+    recognized: 'Recognized',
+    readOnly: 'Read-only',
+    readWrite: 'Read-write',
+    mountRO: 'Read-only',
+    mountRW: 'Read-write',
+    unmount: 'Unmount',
+    thAutoMount: 'Auto Mount',
+    thDevice: 'Device',
+    thLabel: 'Label',
+    thPartId: 'Part ID',
+    thCapacity: 'Capacity',
+    thFilesystem: 'Filesystem',
+    thStatus: 'Status',
+    thMountPoint: 'Mount Point',
+    thVolDevice: 'Vol Device',
+    thRelatedPart: 'Related Partitions',
+    thAction: 'Action',
+    partition: 'Partition',
+    diskMeta: '{n} disks, {m} partitions',
+    volumeMeta: '{n} volumes',
+    mountedMode: 'Mounted ({mode})',
+    activateDone: 'Scan & assemble completed',
+    mountRWDone: 'Volume mounted read-write',
+    mountRODone: 'Volume mounted read-only',
+    unmountDone: 'Volume unmounted',
+    autoMountOff: 'Auto-mount disabled',
+    autoMountOn: 'Auto-mount enabled',
+    actionDone: 'Done',
+    statusRefreshed: 'Status refreshed',
+    fetchFailed: 'Failed to fetch status (HTTP {status})',
+    requestFailed: 'Request failed (HTTP {status})',
+    actionFailed: 'Action failed',
+  },
+};
+
 const appState = {
   statusData: null,
+  language: 'zh-CN',
+  theme: 'light',
 };
+
+function cookieValue(name) {
+  const prefix = `${name}=`;
+  return (
+    document.cookie
+      .split(';')
+      .map((item) => item.trim())
+      .find((item) => item.startsWith(prefix))
+      ?.slice(prefix.length) || ''
+  );
+}
+
+function safeDecode(value) {
+  try {
+    return decodeURIComponent(value || '');
+  } catch (_error) {
+    return value || '';
+  }
+}
+
+function storedValue(name) {
+  try {
+    return localStorage.getItem(name) || sessionStorage.getItem(name) || '';
+  } catch (_error) {
+    return '';
+  }
+}
+
+function parentStoredValue(name) {
+  try {
+    if (!window.parent || window.parent === window) return '';
+    return window.parent.localStorage.getItem(name) || window.parent.sessionStorage.getItem(name) || '';
+  } catch (_error) {
+    return '';
+  }
+}
+
+function queryValue(name) {
+  return new URLSearchParams(location.search).get(name) || '';
+}
+
+function documentThemeValue(doc) {
+  if (!doc) return '';
+  const root = doc.documentElement;
+  const body = doc.body;
+  return [
+    body?.getAttribute('theme-mode'),
+    body?.dataset?.theme,
+    root?.dataset?.theme,
+    root?.classList?.contains('dark') ? 'dark' : '',
+    root?.classList?.contains('light') ? 'light' : '',
+  ].find(Boolean) || '';
+}
+
+function parentDocumentThemeValue() {
+  try {
+    if (!window.parent || window.parent === window) return '';
+    return documentThemeValue(window.parent.document);
+  } catch (_error) {
+    return '';
+  }
+}
+
+function normalizeLanguage(value) {
+  const language = safeDecode(value).replace('_', '-');
+  return language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US';
+}
+
+function currentLanguage() {
+  return normalizeLanguage(cookieValue('language') || queryValue('language') || navigator.language || 'zh-CN');
+}
+
+function normalizeTheme(value) {
+  const theme = safeDecode(value).toLowerCase();
+  if (theme.includes('dark') || theme === 'night') return 'dark';
+  if (theme.includes('light') || theme === 'day') return 'light';
+  if (theme === '10') return 'light';
+  if (theme === '20') return 'dark';
+  if (theme === 'system' || theme === 'auto' || theme === 'os') {
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  return '';
+}
+
+function currentTheme() {
+  const fromSystem = [
+    queryValue('theme'),
+    cookieValue('fnos-theme-mode'),
+    cookieValue('os-theme-mode'),
+    storedValue('fnos-theme-mode'),
+    storedValue('os-theme-mode'),
+    parentStoredValue('fnos-theme-mode'),
+    parentStoredValue('os-theme-mode'),
+    documentThemeValue(document),
+    parentDocumentThemeValue(),
+    queryValue('fnos-theme-mode'),
+  ].map(normalizeTheme).find(Boolean);
+  if (fromSystem) return fromSystem;
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function t(key, params = {}) {
+  const messages = I18N[appState.language] || I18N['zh-CN'];
+  return String(messages[key] || I18N['zh-CN'][key] || key).replace(/\{(\w+)\}/g, (_match, name) => params[name] ?? '');
+}
+
+function applyPreferences({ rerender = false } = {}) {
+  const nextLanguage = currentLanguage();
+  const nextTheme = currentTheme();
+  const languageChanged = nextLanguage !== appState.language;
+
+  appState.language = nextLanguage;
+  appState.theme = nextTheme;
+  document.documentElement.lang = nextLanguage === 'en-US' ? 'en-US' : 'zh-CN';
+  document.documentElement.dataset.theme = nextTheme;
+  document.body.dataset.theme = nextTheme;
+
+  document.querySelectorAll('[data-i18n]').forEach((node) => {
+    node.textContent = t(node.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
+    node.placeholder = t(node.dataset.i18nPlaceholder);
+  });
+  document.title = t('appTitle');
+
+  if (rerender && languageChanged) {
+    renderApp();
+  }
+}
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -32,7 +278,7 @@ function showToast(message, isError = false) {
   }
 
   toastNode.textContent = message;
-  toastNode.style.background = isError ? 'rgba(180, 35, 24, 0.92)' : 'rgba(24, 37, 29, 0.92)';
+  toastNode.classList.toggle('error', isError);
   toastNode.classList.remove('hidden');
   clearTimeout(toastNode._timer);
   toastNode._timer = setTimeout(() => toastNode.classList.add('hidden'), 3200);
@@ -98,7 +344,7 @@ function mountModeFromOptions(options = '') {
 }
 
 function mountModeText(mode = '') {
-  return mode === 'rw' ? '读写' : '只读';
+  return mode === 'rw' ? t('readWrite') : t('readOnly');
 }
 
 function autoMountCheckboxId(path = '') {
@@ -322,26 +568,26 @@ function renderOverview(_statusData, candidateDevices, mountedEntries, inventory
   }
 
   statsNode.innerHTML = [
-    statCard('磁盘', String(inventoryDisks.length)),
-    statCard('分区', String(countPartitions(inventoryDisks))),
-    statCard('可挂载卷', String(candidateDevices.length), candidateDevices.length ? 'ok' : ''),
-    statCard('已挂载卷', String(mountedEntries.length), mountedEntries.length ? 'info' : ''),
+    statCard(t('diskStat'), String(inventoryDisks.length)),
+    statCard(t('partitionStat'), String(countPartitions(inventoryDisks))),
+    statCard(t('mountableVolStat'), String(candidateDevices.length), candidateDevices.length ? 'ok' : ''),
+    statCard(t('mountedVolStat'), String(mountedEntries.length), mountedEntries.length ? 'info' : ''),
   ].join('');
 }
 
 function inventoryStatus(partition, mountedTarget = '') {
   const fstype = filesystemName(partition);
   if (partition.mountpoint || mountedTarget) {
-    return '已挂载';
+    return t('mounted');
   }
   if (SUPPORTED_FILESYSTEMS.has(fstype)) {
-    return '可挂载';
+    return t('mountable');
   }
   if (fstype === 'lvm2_member') {
-    return 'LVM 物理卷';
+    return t('lvmPV');
   }
   if (fstype === 'linux_raid_member' || /raid/i.test(partition.partType || '')) {
-    return 'RAID 成员';
+    return t('raidMember');
   }
   return '-';
 }
@@ -349,12 +595,12 @@ function inventoryStatus(partition, mountedTarget = '') {
 function summarizeDiskStatus(disk, candidateByPath, mountedBySource) {
   const partitions = disk.partitions || [];
   if (partitions.find((partition) => mountedBySource.has(normalizeMountSource(partition.path)))) {
-    return '已有导入卷';
+    return t('hasImportedVol');
   }
   if (partitions.some((partition) => candidateByPath.has(partition.path))) {
-    return '发现可挂载卷';
+    return t('foundMountableVol');
   }
-  return '磁盘';
+  return t('disk');
 }
 
 function getReportRows(statusData, key) {
@@ -602,7 +848,7 @@ function buildVolumeEntries(statusData, disks, candidateDevices, mountedEntries)
         relation: relatedPartitions
           .map((partitionPath) => {
             const partition = resolutionContext.partitionMeta.get(partitionPath);
-            const partLabel = deviceTitle(partitionPath, partition?.label, partition?.partType || '分区');
+            const partLabel = deviceTitle(partitionPath, partition?.label, partition?.partType || t('partition'));
             return `${partLabel} @ ${partitionPath}`;
           })
           .join(' @ '),
@@ -654,7 +900,7 @@ function renderInventory(disks, candidateDevices, mountedEntries, statusData, vo
     return;
   }
 
-  metaNode.textContent = `${disks.length} 块磁盘，${countPartitions(disks)} 个分区`;
+  metaNode.textContent = t('diskMeta', { n: disks.length, m: countPartitions(disks) });
 
   const diskRows = disks.map((disk) => {
     const partitions = disk.partitions || [];
@@ -662,7 +908,7 @@ function renderInventory(disks, candidateDevices, mountedEntries, statusData, vo
 
     rows.push(`
       <tr class="table-row disk-row">
-        <td class="device-cell">${devicePathCell(disk.path, '磁盘')}</td>
+        <td class="device-cell">${devicePathCell(disk.path, t('disk'))}</td>
         <td>${escapeHtml(cleanLabel(disk.label) || '-')}</td>
         <td>-</td>
         <td>${escapeHtml(displayText(disk.size))}</td>
@@ -675,12 +921,12 @@ function renderInventory(disks, candidateDevices, mountedEntries, statusData, vo
     if (!partitions.length) {
       rows.push(`
         <tr class="table-row partition-row muted-row">
-          <td class="device-cell subdevice">无分区</td>
+          <td class="device-cell subdevice">${t('noPartition')}</td>
           <td>-</td>
           <td>-</td>
           <td>-</td>
           <td>-</td>
-          <td>仅检测到整盘</td>
+          <td>${t('diskOnly')}</td>
           <td>-</td>
         </tr>
       `);
@@ -699,14 +945,14 @@ function renderInventory(disks, candidateDevices, mountedEntries, statusData, vo
         || lsblkPartition?.mountpoint
         || '';
       const statusLabel = mountedTarget
-        ? '已挂载'
+        ? t('mounted')
         : candidateEntry
-          ? '可形成卷'
+          ? t('canFormVol')
           : inventoryStatus(partition, mountedTarget);
 
       rows.push(`
         <tr class="table-row partition-row">
-          <td class="device-cell subdevice">${devicePathCell(partition.path, partition.partType || '分区')}</td>
+          <td class="device-cell subdevice">${devicePathCell(partition.path, partition.partType || t('partition'))}</td>
           <td>${escapeHtml(cleanLabel(partition.label) || '-')}</td>
           <td>${escapeHtml(displayText(partition.partId, '-'))}</td>
           <td>${escapeHtml(displayText(partition.size))}</td>
@@ -724,13 +970,13 @@ function renderInventory(disks, candidateDevices, mountedEntries, statusData, vo
     <table class="inventory-table">
       <thead>
         <tr>
-          <th>设备</th>
-          <th>标签</th>
-          <th>分区 ID</th>
-          <th>容量</th>
-          <th>文件系统</th>
-          <th>状态</th>
-          <th>挂载位置</th>
+          <th>${t('thDevice')}</th>
+          <th>${t('thLabel')}</th>
+          <th>${t('thPartId')}</th>
+          <th>${t('thCapacity')}</th>
+          <th>${t('thFilesystem')}</th>
+          <th>${t('thStatus')}</th>
+          <th>${t('thMountPoint')}</th>
         </tr>
       </thead>
       <tbody>
@@ -754,7 +1000,7 @@ function renderVolumes(volumes, statusData) {
 
   const autoMountByDevice = buildAutoMountMap(statusData);
 
-  metaNode.textContent = volumes.length ? `${volumes.length} 个卷` : '';
+  metaNode.textContent = volumes.length ? t('volumeMeta', { n: volumes.length }) : '';
 
   if (!volumes.length) {
     tableContainer.classList.add('hidden');
@@ -767,15 +1013,15 @@ function renderVolumes(volumes, statusData) {
     <table class="inventory-table volume-table">
       <thead>
         <tr>
-          <th>自动挂载</th>
-          <th>卷设备</th>
-          <th>卷标</th>
-          <th>关联分区</th>
-          <th>容量</th>
-          <th>文件系统</th>
-          <th>状态</th>
-          <th>挂载位置</th>
-          <th>操作</th>
+          <th>${t('thAutoMount')}</th>
+          <th>${t('thVolDevice')}</th>
+          <th>${t('thLabel')}</th>
+          <th>${t('thRelatedPart')}</th>
+          <th>${t('thCapacity')}</th>
+          <th>${t('thFilesystem')}</th>
+          <th>${t('thStatus')}</th>
+          <th>${t('thMountPoint')}</th>
+          <th>${t('thAction')}</th>
         </tr>
       </thead>
       <tbody>
@@ -783,21 +1029,21 @@ function renderVolumes(volumes, statusData) {
           const autoMountEntry = autoMountByDevice.get(normalizeMountSource(volume.path));
           const supportedMountMode = volume.mountmode || 'rw';
           const statusLabel = volume.mounted
-            ? `已挂载(${mountModeText(volume.mountMode)})`
+            ? t('mountedMode', { mode: mountModeText(volume.mountMode) })
             : volume.candidate
-              ? '可挂载'
+              ? t('mountable')
               : RECOGNIZED_UNMOUNTABLE_FILESYSTEMS.has(filesystemName(volume))
-                ? `不可挂载(${displayText(volume.fstype)})`
-                : '已识别';
+                ? `${t('unmountable')}(${displayText(volume.fstype)})`
+                : t('recognized');
           const mountTarget = volume.mounted && volume.mountTarget ? displayMountTarget(volume.mountTarget, statusData) : '-';
           const checkboxId = autoMountCheckboxId(volume.path);
           const actions = volume.mounted
-            ? `<button class="btn danger small" data-unmount="${escapeHtml(volume.mountTarget)}">卸载</button>`
+            ? `<button class="btn danger small" data-unmount="${escapeHtml(volume.mountTarget)}">${t('unmount')}</button>`
             : volume.candidate
               ? (supportedMountMode === 'ro'
-                ? `<button class="btn secondary small" data-mount="${escapeHtml(volume.path)}" data-mode="ro">只读</button>`
-                : `<button class="btn secondary small" data-mount="${escapeHtml(volume.path)}" data-mode="ro">只读</button>
-                   <button class="btn warn small" data-mount="${escapeHtml(volume.path)}" data-mode="rw">读写</button>`)
+                ? `<button class="btn secondary small" data-mount="${escapeHtml(volume.path)}" data-mode="ro">${t('mountRO')}</button>`
+                : `<button class="btn secondary small" data-mount="${escapeHtml(volume.path)}" data-mode="ro">${t('mountRO')}</button>
+                   <button class="btn warn small" data-mount="${escapeHtml(volume.path)}" data-mode="rw">${t('mountRW')}</button>`)
               : '-';
           const autoCheckbox = volume.mounted || volume.candidate
             ? `
@@ -845,7 +1091,7 @@ async function loadStatus() {
   });
 
   if (!response.ok) {
-    throw new Error(`获取状态失败（HTTP ${response.status}）`);
+    throw new Error(t('fetchFailed', { status: response.status }));
   }
 
   const statusData = await response.json();
@@ -865,12 +1111,12 @@ async function invokeAction(action, params = {}) {
   });
 
   if (!response.ok) {
-    throw new Error(`请求失败（HTTP ${response.status}）`);
+    throw new Error(t('requestFailed', { status: response.status }));
   }
 
   const result = await response.json();
   if (!result?.ok) {
-    throw new Error(result?.message || '操作失败');
+    throw new Error(result?.message || t('actionFailed'));
   }
 
   if (result.status) {
@@ -884,15 +1130,15 @@ async function invokeAction(action, params = {}) {
 function successToastMessage(action, params = {}) {
   switch (action) {
     case 'activate':
-      return '扫描并组装完成';
+      return t('activateDone');
     case 'mount':
-      return params.mode === 'rw' ? '卷已按读写方式挂载' : '卷已按只读方式挂载';
+      return params.mode === 'rw' ? t('mountRWDone') : t('mountRODone');
     case 'unmount':
-      return '卷已卸载';
+      return t('unmountDone');
     case 'auto-mount':
-      return params.auto === '0' ? '已关闭自动挂载' : '已开启自动挂载';
+      return params.auto === '0' ? t('autoMountOff') : t('autoMountOn');
     default:
-      return '操作完成';
+      return t('actionDone');
   }
 }
 
@@ -917,7 +1163,7 @@ async function refreshStatus({ activate = false, silent = false } = {}) {
 
   const statusData = await loadStatus();
   if (!silent) {
-    showToast('状态已刷新', false);
+    showToast(t('statusRefreshed'), false);
   }
   return statusData;
 }
@@ -1019,6 +1265,7 @@ function bindUiActions() {
 }
 
 window.addEventListener('load', async () => {
+  applyPreferences();
   bindUiActions();
 
   try {
@@ -1030,4 +1277,12 @@ window.addEventListener('load', async () => {
       showToast(fetchError.message, true);
     }
   }
+});
+
+window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  applyPreferences({ rerender: true });
+});
+
+window.addEventListener('storage', () => {
+  applyPreferences({ rerender: true });
 });

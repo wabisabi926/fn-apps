@@ -1,14 +1,85 @@
 :root {
-  --bg: #edf1ee;
+  color-scheme: light;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
   --panel: #ffffff;
-  --ink: #18251d;
-  --muted: #5c6e62;
-  --line: #d8e2db;
+  --panel-2: #f2f3f5;
+  --field: #f7f8fa;
+  --sidebar-line: #e3e5e8;
+  --line: #dcdfe4;
+  --line-strong: #c8cdd4;
+  --text: #1f2329;
+  --muted: #626973;
+  --subtle: #8a9099;
   --accent: #216869;
+  --accent-hover: #2a86ff;
+  --accent-soft: rgba(33, 104, 105, 0.16);
   --accent-2: #49a078;
+  --danger: #ff5c6c;
+  --danger-text: #a92836;
   --warn: #cc7a00;
-  --danger: #b42318;
-  --shadow: 0 10px 28px rgba(24, 37, 29, 0.06);
+  --hover: #f1f3f6;
+  --active: #e9f2ff;
+  --icon-bg: #eef1f5;
+  --icon-text: #69717c;
+  --button: #eef0f3;
+  --button-hover: #e3e6ea;
+  --button-text: #30343a;
+  --shadow: 0 16px 40px rgba(22, 30, 45, 0.14);
+  --stat-ok: #eff8f2;
+  --stat-info: #f3f8f8;
+  --stat-bg: #f8fbf8;
+  --row-hover: #f8fbf8;
+  --disk-row: #f5f8f5;
+  --mounted-row: #f7fbf8;
+  --candidate-row: #fffaf2;
+  --badge-bg: #edf5f0;
+  --badge-text: #216869;
+  --badge-subtle-bg: #f2f4f2;
+  --chip-border: #dcdfe4;
+  --chip-active-bg: #edf5f0;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b0b0c;
+  --surface: #202123;
+  --panel: #242526;
+  --panel-2: #2b2c2e;
+  --field: #1f2021;
+  --sidebar-line: #242426;
+  --line: #3a3b3d;
+  --line-strong: #4a4b4d;
+  --text: #f1f1f2;
+  --muted: #a9aaad;
+  --subtle: #77797d;
+  --accent: #49a078;
+  --accent-hover: #5bbf90;
+  --accent-soft: rgba(73, 160, 120, 0.16);
+  --accent-2: #216869;
+  --danger: #ff5c6c;
+  --danger-text: #ffd8dd;
+  --warn: #e6a030;
+  --hover: #18191b;
+  --active: #202124;
+  --icon-bg: #303236;
+  --icon-text: #e8e8ea;
+  --button: #303133;
+  --button-hover: #38393c;
+  --button-text: #dedfe1;
+  --shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+  --stat-ok: #1a2e22;
+  --stat-info: #1a2a2e;
+  --stat-bg: #1e2420;
+  --row-hover: #1e2420;
+  --disk-row: #1e2420;
+  --mounted-row: #1a2e22;
+  --candidate-row: #2a2518;
+  --badge-bg: #1e2e24;
+  --badge-text: #49a078;
+  --badge-subtle-bg: #222422;
+  --chip-border: #3a3b3d;
+  --chip-active-bg: #1e2e24;
 }
 
 * {
@@ -17,11 +88,19 @@
 
 body {
   margin: 0;
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  color: var(--ink);
-  background:
-    radial-gradient(circle at top right, rgba(73, 160, 120, 0.18), transparent 28%),
-    linear-gradient(180deg, #f7faf7 0%, var(--bg) 100%);
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", "HarmonyOS Sans SC", "Microsoft YaHei UI", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 .page {
@@ -67,13 +146,45 @@ body {
   flex-wrap: wrap;
 }
 
+.primary-btn,
+.danger-btn,
+.ghost-btn,
 .btn {
+  height: 30px;
   border: 0;
-  border-radius: 10px;
-  padding: 9px 14px;
-  font-size: 13px;
-  font-weight: 600;
+  border-radius: 6px;
   cursor: pointer;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 800;
+  transition: background 0.15s;
+}
+
+.primary-btn {
+  background: var(--accent);
+  color: #fff;
+}
+
+.primary-btn:hover {
+  background: var(--accent-hover);
+}
+
+.ghost-btn {
+  background: var(--button);
+  color: var(--button-text);
+}
+
+.ghost-btn:hover {
+  background: var(--button-hover);
+}
+
+.danger-btn {
+  background: var(--danger);
+  color: #fff;
+}
+
+.danger-btn:hover {
+  opacity: 0.88;
 }
 
 .btn.primary {
@@ -82,8 +193,8 @@ body {
 }
 
 .btn.secondary {
-  color: var(--ink);
-  background: #edf5f0;
+  color: var(--text);
+  background: var(--button);
 }
 
 .btn.warn {
@@ -99,6 +210,15 @@ body {
 .btn.small {
   padding: 6px 9px;
   font-size: 12px;
+  height: auto;
+}
+
+.primary-btn:disabled,
+.danger-btn:disabled,
+.ghost-btn:disabled,
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .panel {
@@ -134,15 +254,15 @@ body {
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: #f8fbf8;
+  background: var(--stat-bg);
 }
 
 .stat-card.ok {
-  background: #eff8f2;
+  background: var(--stat-ok);
 }
 
 .stat-card.info {
-  background: #f3f8f8;
+  background: var(--stat-info);
 }
 
 .stat-value {
@@ -175,18 +295,24 @@ body {
 
 .toast {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
-  max-width: 420px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  color: #fff;
-  background: rgba(24, 37, 29, 0.92);
+  right: 22px;
+  bottom: 22px;
+  max-width: min(460px, calc(100vw - 44px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--button);
   box-shadow: var(--shadow);
+  color: var(--text);
+  padding: 11px 14px;
+}
+
+.toast.error {
+  border-color: var(--danger);
+  color: var(--danger-text);
 }
 
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .table-wrap {
@@ -218,11 +344,11 @@ body {
 }
 
 .table-row:hover td {
-  background: #f8fbf8;
+  background: var(--row-hover);
 }
 
 .disk-row td {
-  background: #f5f8f5;
+  background: var(--disk-row);
   font-weight: 700;
 }
 
@@ -231,11 +357,11 @@ body {
 }
 
 .mounted-row td {
-  background: #f7fbf8;
+  background: var(--mounted-row);
 }
 
 .candidate-row td {
-  background: #fffaf2;
+  background: var(--candidate-row);
 }
 
 .muted-row td {
@@ -337,7 +463,7 @@ body {
 .card {
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: #fbfcfb;
+  background: var(--panel-2);
 }
 
 .resource-card {
@@ -393,12 +519,12 @@ body {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
-  background: #edf5f0;
-  color: var(--accent);
+  background: var(--badge-bg);
+  color: var(--badge-text);
 }
 
 .badge.subtle {
-  background: #f2f4f2;
+  background: var(--badge-subtle-bg);
   color: var(--muted);
 }
 
@@ -408,15 +534,15 @@ body {
   gap: 4px;
   padding: 4px 8px;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: #fff;
+  border: 1px solid var(--chip-border);
+  background: var(--panel);
   color: var(--muted);
   font-size: 12px;
 }
 
 .chip.active {
-  color: var(--accent);
-  background: #edf5f0;
+  color: var(--badge-text);
+  background: var(--chip-active-bg);
 }
 
 .chip.mono-chip {

@@ -1,0 +1,6 @@
+[common]
+display_name="Volume Manager"
+desc="VGManager, supports non-fnOS storage pools (other NAS system storage pools)."
+
+[entry]
+title="Volume Manager"
