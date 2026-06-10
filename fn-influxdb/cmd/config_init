@@ -1,0 +1,10 @@
+#!/bin/bash
+
+### This script is called before the user change environment variables in application setting page.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/_functions"
+
+if [ -f "${SETTINGS_FILE}" ]; then
+    echo "wizard_port=$(get_port)"
+fi

@@ -1,0 +1,17 @@
+#!/bin/bash
+
+### This script is called after the user uninstalls the application.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/_functions"
+
+remove_cron
+kill_collector 2>/dev/null
+stop_process 2>/dev/null
+
+if [ "${wizard_data_action:-}" == "delete" ]; then
+    delete_influxdb_data 2>/dev/null
+    rm -rf "${TRIM_PKGVAR}"
+fi
+
+exit 0

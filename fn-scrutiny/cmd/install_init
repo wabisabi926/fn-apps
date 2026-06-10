@@ -1,0 +1,15 @@
+#!/bin/bash
+
+### This script is called before the user installs the application.
+
+echo "wizard_port=8080"
+echo "wizard_host_id=fnOS"
+echo "wizard_cron_interval=15"
+echo "wizard_translate=true"
+echo "wizard_influxdb_mode=auto"
+echo "wizard_influxdb_host=localhost"
+echo "wizard_influxdb_port=8086"
+echo "wizard_influxdb_org=scrutiny"
+echo "wizard_influxdb_bucket=scrutiny"
+
+exit 0

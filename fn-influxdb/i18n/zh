@@ -1,0 +1,41 @@
+[common]
+display_name="InfluxDB"
+desc="高性能时序数据库，适用于指标、事件和分析工作负载。"
+
+[entry]
+title="InfluxDB"
+
+[wizard]
+install_stepTitle="InfluxDB 安装"
+install_item1_helpText="InfluxDB 是一款时序数据库，专为处理高写入和查询负载而设计。"
+install_item2_label="HTTP 端口"
+install_item2_required="请输入端口号"
+install_item2_rules="端口号必须为 1-65535 之间的数字"
+install_item3_label="管理员用户名"
+install_item3_required="请输入用户名"
+install_item4_label="管理员密码"
+install_item4_required="请输入密码"
+install_item4_min="密码长度至少为8位"
+install_item5_label="组织"
+install_item5_required="请输入组织名称"
+install_item6_label="Bucket"
+install_item6_required="请输入 Bucket 名称"
+install_item7_label="数据保留期"
+install_item7_helpText="数据保留时长，默认为 3 年（26000h）。"
+install_item8_label="集成 InfluxDB CLI"
+install_item8_options1="安装 - 包含 influx 命令行工具"
+install_item8_options2="不安装 - 仅使用 Web 管理界面"
+install_item8_required="请选择"
+
+config_stepTitle="InfluxDB 配置"
+config_item1_helpText="修改 InfluxDB 设置。更改端口后需要重启服务。"
+config_item2_label="HTTP 端口"
+config_item2_required="请输入端口号"
+config_item2_rules="端口号必须为 1-65535 之间的数字"
+
+uninstall_stepTitle="卸载 InfluxDB"
+uninstall_item1_helpText="您即将卸载 InfluxDB。请选择如何处理应用数据："
+uninstall_item1_label="数据保留选项"
+uninstall_item1_options1="保留数据 - 重新安装时可恢复（推荐）"
+uninstall_item1_options2="删除所有数据 - 此操作不可恢复！"
+uninstall_item1_required="请选择"

@@ -1,0 +1,41 @@
+[common]
+display_name="InfluxDB"
+desc="High-performance time series database, ideal for metrics, events, and analytics workloads."
+
+[entry]
+title="InfluxDB"
+
+[wizard]
+install_stepTitle="InfluxDB Installation"
+install_item1_helpText="InfluxDB is a time series database designed to handle high write and query loads."
+install_item2_label="HTTP Port"
+install_item2_required="Please enter a port number"
+install_item2_rules="Port number must be between 1-65535"
+install_item3_label="Admin Username"
+install_item3_required="Please enter a username"
+install_item4_label="Admin Password"
+install_item4_required="Please enter a password"
+install_item4_min="Password must be at least 8 characters"
+install_item5_label="Organization"
+install_item5_required="Please enter an organization name"
+install_item6_label="Bucket"
+install_item6_required="Please enter a bucket name"
+install_item7_label="Data Retention"
+install_item7_helpText="Data retention period. Default is 3 years (26000h)."
+install_item8_label="Integrate InfluxDB CLI"
+install_item8_options1="Install - includes influx command-line tool"
+install_item8_options2="Skip - Web UI only"
+install_item8_required="Please select"
+
+config_stepTitle="InfluxDB Configuration"
+config_item1_helpText="Modify InfluxDB settings. Changing the port requires a restart."
+config_item2_label="HTTP Port"
+config_item2_required="Please enter a port number"
+config_item2_rules="Port number must be between 1-65535"
+
+uninstall_stepTitle="Uninstall InfluxDB"
+uninstall_item1_helpText="You are about to uninstall InfluxDB. Please select how to handle application data:"
+uninstall_item1_label="Data retention options"
+uninstall_item1_options1="Keep data - can be restored on reinstallation (Recommended)"
+uninstall_item1_options2="Delete all data - this operation is irreversible!"
+uninstall_item1_required="Please select"

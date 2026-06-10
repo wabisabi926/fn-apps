@@ -1,0 +1,14 @@
+appname               = fn-scrutiny
+version               = 1.62.4
+display_name          = "${common.display_name}"
+desc                  = "${common.desc}"
+platform              = all
+source                = thirdparty
+desktop_uidir         = ui
+desktop_applaunchname = fn-scrutiny.Application
+maintainer            = Starosdev
+maintainer_url        = https://github.com/Starosdev/scrutiny
+distributor           = RROrg
+distributor_url       = https://github.com/RROrg/fn-apps
+install_dep_apps      = fn-influxdb
+install_type          = root
