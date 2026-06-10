@@ -1,6 +1,6 @@
 [common]
 display_name="音频播放器"
-desc="音频播放器应用，用于播放音频文件。支持包括 mp3、wav、ogg、flac、m4a 等格式。"
+desc="音频播放器应用，用于播放音频文件。支持包括 mp3、wav、flac、ogg、m4a、aac、wma、ape 等格式，会自动加载音频文件所在目录的歌词文件。"
 
 [entry]
 title="音频播放器"

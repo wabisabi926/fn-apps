@@ -1,7 +1,6 @@
 [common]
 display_name="执行器"
-desc="执行器可直接在可执行程序上右键执行"
+desc="执行器可直接在可执行程序上右键执行，支持 sh、py、pl、rb、js、ts、lua、bash、zsh、fish、bin、run 等格式的文件。"
 
 [entry]
 title="执行"
-

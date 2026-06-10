@@ -1,7 +1,6 @@
 [common]
 display_name="Execute"
-desc="The executor allows users to right-click on executable programs and execute them directly."
+desc="The executor allows users to right-click on executable programs and execute them directly, supporting files in formats such as sh, py, pl, rb, js, ts, lua, bash, zsh, fish, bin, and run."
 
 [entry]
 title="Execute"
-

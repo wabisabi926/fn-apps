@@ -1293,7 +1293,7 @@
     let currentIndex = -1;
     let currentLyrics = [];
     let activeLyricIndex = -1;
-    let browserCurrentDir = '/';
+    let browserCurrentDir = '/var/apps/fn-audioplayer/tmp';
     let browserSelectedPaths = new Set();
 
     const I18N = {
@@ -1742,10 +1742,10 @@
     }
 
     function openBrowser() {
-      browserCurrentDir = '/';
+      browserCurrentDir = '/var/apps/fn-audioplayer/tmp';
       browserSelectedPaths = new Set();
       document.getElementById('browserOverlay').classList.add('active');
-      browseDir('/');
+      browseDir('/var/apps/fn-audioplayer/tmp');
     }
 
     function closeBrowser() {
