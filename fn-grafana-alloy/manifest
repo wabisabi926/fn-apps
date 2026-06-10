@@ -1,7 +1,7 @@
 appname               = fn-grafana-alloy
-version               = 1.13.2
-display_name          = Grafana Alloy
-desc                  = 可观测性数据收集器，收集系统日志、应用日志发送到 Loki
+version               = 1.16.3
+display_name          = "${common.display_name}"
+desc                  = "${common.desc}"
 platform              = all
 source                = thirdparty
 maintainer            = Grafana Labs

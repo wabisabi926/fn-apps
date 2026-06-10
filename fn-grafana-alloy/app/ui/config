@@ -1,7 +1,7 @@
 {
     ".url": {
         "fn-grafana-alloy.main": {
-            "title": "Grafana Alloy",
+            "title": "${entry.title}",
             "icon": "images/icon-{0}.png",
             "type": "url",
             "protocol": "http",
