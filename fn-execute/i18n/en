@@ -1,0 +1,7 @@
+[common]
+display_name="Execute"
+desc="The executor allows users to right-click on executable programs and execute them directly."
+
+[entry]
+title="Execute"
+

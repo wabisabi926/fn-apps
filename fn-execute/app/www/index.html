@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>执行器</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f6f8;
+      --surface: #ffffff;
+      --panel: #ffffff;
+      --panel-2: #f2f3f5;
+      --field: #f7f8fa;
+      --sidebar-line: #e3e5e8;
+      --line: #dcdfe4;
+      --line-strong: #c8cdd4;
+      --text: #1f2329;
+      --muted: #626973;
+      --subtle: #8a9099;
+      --accent: #1677ff;
+      --accent-hover: #2a86ff;
+      --accent-soft: rgba(22, 119, 255, 0.16);
+      --danger: #ff5c6c;
+      --danger-text: #a92836;
+      --danger-soft: rgba(255, 92, 108, 0.12);
+      --hover: #f1f3f6;
+      --active: #e9f2ff;
+      --icon-bg: #eef1f5;
+      --icon-text: #69717c;
+      --button: #eef0f3;
+      --button-hover: #e3e6ea;
+      --button-text: #30343a;
+      --shadow: 0 16px 40px rgba(22, 30, 45, 0.14);
+      --terminal-bg: #1e1e1e;
+      --terminal-text: #d4d4d4;
+      --terminal-stdout: #d4d4d4;
+      --terminal-stderr: #f48771;
+      --terminal-info: #608b4e;
+      --terminal-error: #f44747;
+      --terminal-divider: #444;
+      --success: #22c55e;
+      --success-soft: rgba(34, 197, 94, 0.12);
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0b0b0c;
+      --surface: #202123;
+      --panel: #242526;
+      --panel-2: #2b2c2e;
+      --field: #1f2021;
+      --sidebar-line: #242426;
+      --line: #3a3b3d;
+      --line-strong: #4a4b4d;
+      --text: #f1f1f2;
+      --muted: #a9aaad;
+      --subtle: #77797d;
+      --accent: #1677ff;
+      --accent-hover: #2a86ff;
+      --accent-soft: rgba(22, 119, 255, 0.16);
+      --danger: #ff5c6c;
+      --danger-text: #ffd8dd;
+      --danger-soft: rgba(255, 92, 108, 0.16);
+      --hover: #18191b;
+      --active: #202124;
+      --icon-bg: #303236;
+      --icon-text: #e8e8ea;
+      --button: #303133;
+      --button-hover: #38393c;
+      --button-text: #dedfe1;
+      --shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+      --terminal-bg: #0d0d0d;
+      --terminal-text: #d4d4d4;
+      --terminal-stdout: #d4d4d4;
+      --terminal-stderr: #f48771;
+      --terminal-info: #6a9955;
+      --terminal-error: #f44747;
+      --terminal-divider: #3a3a3a;
+      --success: #4ade80;
+      --success-soft: rgba(74, 222, 128, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Inter", "HarmonyOS Sans SC", "Microsoft YaHei UI", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      letter-spacing: 0;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: var(--surface);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 20px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .topbar h1 {
+      font-size: 18px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .file-path {
+      font-size: 13px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .primary-btn,
+    .danger-btn,
+    .ghost-btn {
+      height: 32px;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+      padding: 0 16px;
+      font-size: 13px;
+      font-weight: 700;
+      transition: background 0.15s;
+    }
+
+    .primary-btn {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .primary-btn:hover {
+      background: var(--accent-hover);
+    }
+
+    .primary-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .primary-btn:disabled:hover {
+      background: var(--accent);
+    }
+
+    .danger-btn {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .danger-btn:hover {
+      background: #e04455;
+    }
+
+    .danger-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .danger-btn:disabled:hover {
+      background: var(--danger);
+    }
+
+    .ghost-btn {
+      background: var(--button);
+      color: var(--button-text);
+    }
+
+    .ghost-btn:hover {
+      background: var(--button-hover);
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      flex-wrap: wrap;
+    }
+
+    .toolbar label {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .args-input {
+      flex: 1;
+      min-width: 180px;
+      height: 32px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--field);
+      color: var(--text);
+      font-size: 13px;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      outline: none;
+    }
+
+    .args-input:focus {
+      border-color: var(--accent);
+    }
+
+    .args-input:disabled {
+      opacity: 0.6;
+    }
+
+    .args-input::placeholder {
+      color: var(--subtle);
+    }
+
+    .preview-section {
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .preview-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 20px;
+      font-size: 12px;
+      color: var(--accent);
+      cursor: pointer;
+      background: var(--panel-2);
+      -webkit-user-select: none;
+      user-select: none;
+      font-weight: 600;
+    }
+
+    .preview-toggle:hover {
+      background: var(--hover);
+    }
+
+    .preview-toggle .arrow {
+      display: inline-block;
+      transition: transform 0.2s;
+      font-size: 10px;
+    }
+
+    .preview-toggle .arrow.open {
+      transform: rotate(90deg);
+    }
+
+    .preview-content {
+      padding: 10px 20px;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: var(--muted);
+      max-height: 150px;
+      overflow: auto;
+      background: var(--field);
+    }
+
+    .output-area {
+      flex: 1;
+      overflow: auto;
+      background: var(--terminal-bg);
+      color: var(--terminal-text);
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 13px;
+      padding: 12px 16px;
+      line-height: 1.6;
+    }
+
+    .output-area .line {
+      min-height: 20px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .output-area .stdout {
+      color: var(--terminal-stdout);
+    }
+
+    .output-area .stderr {
+      color: var(--terminal-stderr);
+    }
+
+    .output-area .info {
+      color: var(--terminal-info);
+    }
+
+    .output-area .error {
+      color: var(--terminal-error);
+    }
+
+    .output-area .divider {
+      border-top: 1px solid var(--terminal-divider);
+      margin: 8px 0;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 20px;
+      background: var(--panel);
+      border-top: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .status-dot.idle {
+      background: var(--subtle);
+    }
+
+    .status-dot.running {
+      background: var(--success);
+      animation: pulse 1s infinite;
+    }
+
+    .status-dot.done {
+      background: var(--success);
+    }
+
+    .status-dot.error,
+    .status-dot.timeout,
+    .status-dot.killed {
+      background: var(--danger);
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
+    .exit-code {
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-weight: 700;
+    }
+
+    .exit-code.success {
+      color: var(--success);
+    }
+
+    .exit-code.fail {
+      color: var(--danger);
+    }
+
+    .toast {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      max-width: min(460px, calc(100vw - 44px));
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--button);
+      box-shadow: var(--shadow);
+      color: var(--text);
+      padding: 11px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 100;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+
+    .toast.hidden {
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+    }
+
+    .toast.error {
+      border-color: var(--danger);
+      color: var(--danger-text);
+    }
+
+    @media (max-width: 640px) {
+      .topbar {
+        padding: 12px 14px 10px;
+      }
+
+      .toolbar {
+        padding: 8px 14px;
+      }
+
+      .status-bar {
+        padding: 6px 14px;
+      }
+
+      .output-area {
+        padding: 10px 12px;
+      }
+
+      .preview-content {
+        padding: 8px 14px;
+      }
+
+      .preview-toggle {
+        padding: 6px 14px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 data-i18n="appTitle">执行器</h1>
+        <span class="file-path" id="headerPath"></span>
+      </div>
+      <div class="topbar-right">
+        <button class="primary-btn" id="btnExecute" onclick="doExecute()" data-i18n="execute">执行</button>
+        <button class="danger-btn" id="btnStop" onclick="doStop()" disabled data-i18n="stop">终止</button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <label data-i18n="argsLabel">参数:</label>
+      <input type="text" class="args-input" id="argsInput" placeholder="输入命令行参数（可选）" data-i18n-placeholder="argsPlaceholder">
+    </div>
+
+    <div class="preview-section" id="previewSection" style="display:none;">
+      <div class="preview-toggle" onclick="togglePreview()">
+        <span class="arrow" id="previewArrow">▶</span>
+        <span data-i18n="filePreview">文件预览</span>
+      </div>
+      <div class="preview-content" id="previewContent" style="display:none;"></div>
+    </div>
+
+    <div class="output-area" id="outputArea">
+      <div class="line info" data-i18n-dynamic="waitingToExecute">等待执行...</div>
+    </div>
+
+    <div class="status-bar">
+      <span class="status-indicator">
+        <span class="status-dot idle" id="statusDot"></span>
+        <span id="statusText" data-i18n-dynamic="ready">就绪</span>
+      </span>
+      <span id="exitCodeDisplay" style="display:none;">
+        <span data-i18n="exitCode">退出码</span>: <span class="exit-code" id="exitCodeValue"></span>
+      </span>
+      <span id="timeDisplay" style="display:none;"></span>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script>
+    const I18N = {
+      "zh-CN": {
+        appTitle: "执行器",
+        execute: "执行",
+        stop: "终止",
+        argsLabel: "参数:",
+        argsPlaceholder: "输入命令行参数（可选）",
+        filePreview: "文件预览",
+        waitingToExecute: "等待执行...",
+        ready: "就绪",
+        running: "执行中...",
+        done: "完成",
+        error: "错误",
+        timeout: "超时",
+        killed: "已终止",
+        exitCode: "退出码",
+        elapsedTime: "耗时: {time}s",
+        noFilePath: "错误: 未提供文件路径",
+        noFilePathStatus: "无文件路径",
+        startFailed: "启动执行失败: {msg}",
+        failed: "失败",
+        userKilled: "[用户终止执行]",
+        statusDone: "[完成] 退出码: {code}",
+        statusError: "[错误] 退出码: {code}",
+        statusTimeout: "[超时] 退出码: {code}",
+        statusKilled: "[已终止] 退出码: {code}",
+      },
+      "en-US": {
+        appTitle: "Execute",
+        execute: "Execute",
+        stop: "Stop",
+        argsLabel: "Args:",
+        argsPlaceholder: "Enter command line arguments (optional)",
+        filePreview: "File Preview",
+        waitingToExecute: "Waiting to execute...",
+        ready: "Ready",
+        running: "Running...",
+        done: "Done",
+        error: "Error",
+        timeout: "Timeout",
+        killed: "Killed",
+        exitCode: "Exit code",
+        elapsedTime: "Time: {time}s",
+        noFilePath: "Error: No file path provided",
+        noFilePathStatus: "No file path",
+        startFailed: "Failed to start: {msg}",
+        failed: "Failed",
+        userKilled: "[Killed by user]",
+        statusDone: "[Done] Exit code: {code}",
+        statusError: "[Error] Exit code: {code}",
+        statusTimeout: "[Timeout] Exit code: {code}",
+        statusKilled: "[Killed] Exit code: {code}",
+      }
+    };
+
+    let currentLang = "zh-CN";
+
+    function t(key, params) {
+      const messages = I18N[currentLang] || I18N["zh-CN"];
+      let text = messages[key] || I18N["zh-CN"][key] || key;
+      if (params) {
+        Object.keys(params).forEach(k => {
+          text = text.replace(new RegExp('\\{' + k + '\\}', 'g'), params[k]);
+        });
+      }
+      return text;
+    }
+
+    function detectLanguage() {
+      try {
+        const cookie = document.cookie.split(';').map(s => s.trim()).find(s => s.startsWith('language='));
+        if (cookie) {
+          const val = decodeURIComponent(cookie.split('=')[1] || '');
+          if (val.toLowerCase().startsWith('zh')) return 'zh-CN';
+          if (val.toLowerCase().startsWith('en')) return 'en-US';
+        }
+      } catch (e) { }
+      const urlLang = new URLSearchParams(location.search).get('language');
+      if (urlLang) {
+        if (urlLang.toLowerCase().startsWith('zh')) return 'zh-CN';
+        if (urlLang.toLowerCase().startsWith('en')) return 'en-US';
+      }
+      const nav = (navigator.language || '').toLowerCase();
+      if (nav.startsWith('zh')) return 'zh-CN';
+      return 'en-US';
+    }
+
+    function applyI18n() {
+      currentLang = detectLanguage();
+      document.documentElement.lang = currentLang === 'zh-CN' ? 'zh-CN' : 'en';
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        el.textContent = t(el.dataset.i18n);
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        el.placeholder = t(el.dataset.i18nPlaceholder);
+      });
+      document.title = t('appTitle');
+    }
+
+    function detectTheme() {
+      try {
+        const cookie = document.cookie.split(';').map(s => s.trim()).find(s => s.startsWith('fnos-theme-mode='));
+        if (cookie) {
+          const val = decodeURIComponent(cookie.split('=')[1] || '').toLowerCase();
+          if (val === '10' || val === 'light') return 'light';
+          if (val === '20' || val === 'dark') return 'dark';
+        }
+      } catch (e) { }
+      try {
+        const bodyTheme = document.body?.getAttribute('theme-mode');
+        if (bodyTheme === '10' || bodyTheme === 'light') return 'light';
+        if (bodyTheme === '20' || bodyTheme === 'dark') return 'dark';
+      } catch (e) { }
+      try {
+        const stored = localStorage.getItem('fnos-theme-mode');
+        if (stored === '10' || stored === 'light') return 'light';
+        if (stored === '20' || stored === 'dark') return 'dark';
+      } catch (e) { }
+      try {
+        const parentStored = window.parent?.localStorage?.getItem('fnos-theme-mode');
+        if (parentStored === '10' || parentStored === 'light') return 'light';
+        if (parentStored === '20' || parentStored === 'dark') return 'dark';
+      } catch (e) { }
+      try {
+        const parentDoc = window.parent?.document;
+        if (parentDoc) {
+          const root = parentDoc.documentElement;
+          const body = parentDoc.body;
+          const themeAttr = [body?.getAttribute('theme-mode'), body?.dataset?.theme, root?.dataset?.theme].find(Boolean);
+          if (themeAttr === '10' || themeAttr === 'light') return 'light';
+          if (themeAttr === '20' || themeAttr === 'dark') return 'dark';
+        }
+      } catch (e) { }
+      const urlTheme = new URLSearchParams(location.search).get('theme');
+      if (urlTheme === 'light') return 'light';
+      if (urlTheme === 'dark') return 'dark';
+      return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    function applyTheme() {
+      const theme = detectTheme();
+      document.documentElement.dataset.theme = theme;
+    }
+
+    const outputArea = document.getElementById('outputArea');
+    const argsInput = document.getElementById('argsInput');
+    const btnExecute = document.getElementById('btnExecute');
+    const btnStop = document.getElementById('btnStop');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const headerPath = document.getElementById('headerPath');
+    const exitCodeDisplay = document.getElementById('exitCodeDisplay');
+    const exitCodeValue = document.getElementById('exitCodeValue');
+    const timeDisplay = document.getElementById('timeDisplay');
+    const previewSection = document.getElementById('previewSection');
+    const previewContent = document.getElementById('previewContent');
+    const previewArrow = document.getElementById('previewArrow');
+
+    const params = new URLSearchParams(window.location.search);
+    const openedPath = params.get('path');
+    let currentTaskId = null;
+    let pollTimer = null;
+
+    function clearOutput() {
+      outputArea.innerHTML = '';
+    }
+
+    function addLine(text, cls) {
+      const div = document.createElement('div');
+      div.className = 'line ' + (cls || 'stdout');
+      div.textContent = text;
+      outputArea.appendChild(div);
+      outputArea.scrollTop = outputArea.scrollHeight;
+    }
+
+    function setStatus(status, textKey, textParams) {
+      statusDot.className = 'status-dot ' + status;
+      statusText.textContent = textParams ? t(textKey, textParams) : t(textKey);
+    }
+
+    function setExitCode(code) {
+      exitCodeDisplay.style.display = '';
+      exitCodeValue.textContent = code;
+      exitCodeValue.className = 'exit-code ' + (code === 0 ? 'success' : 'fail');
+    }
+
+    function setRunning(running) {
+      btnExecute.disabled = running;
+      btnStop.disabled = !running;
+      argsInput.disabled = running;
+    }
+
+    function togglePreview() {
+      const content = previewContent;
+      const arrow = previewArrow;
+      if (content.style.display === 'none') {
+        content.style.display = '';
+        arrow.classList.add('open');
+      } else {
+        content.style.display = 'none';
+        arrow.classList.remove('open');
+      }
+    }
+
+    function loadFileInfo() {
+      if (!openedPath) return;
+      headerPath.textContent = openedPath;
+      fetch(`./api/file?path=${encodeURIComponent(openedPath)}`)
+        .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+        .then(data => {
+          if (data.preview) {
+            previewSection.style.display = '';
+            previewContent.textContent = data.preview;
+          }
+        })
+        .catch(() => { });
+    }
+
+    function doExecute() {
+      if (!openedPath) {
+        addLine(t('noFilePath'), 'error');
+        return;
+      }
+
+      clearOutput();
+      lastStdoutLen = 0;
+      lastStderrLen = 0;
+      addLine('$ ' + openedPath + (argsInput.value ? ' ' + argsInput.value : ''), 'info');
+      addLine('', '');
+
+      setStatus('running', 'running');
+      setRunning(true);
+      exitCodeDisplay.style.display = 'none';
+      timeDisplay.style.display = 'none';
+
+      const startTime = Date.now();
+      const timerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        timeDisplay.style.display = '';
+        timeDisplay.textContent = t('elapsedTime', { time: elapsed });
+      }, 1000);
+
+      const args = encodeURIComponent(argsInput.value);
+      const url = `./api/execute?path=${encodeURIComponent(openedPath)}&args=${args}`;
+
+      fetch(url)
+        .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+        .then(data => {
+          currentTaskId = data.task_id;
+          pollTimer = setInterval(() => pollTask(currentTaskId, timerInterval), 500);
+        })
+        .catch(err => {
+          addLine(t('startFailed', { msg: err.message }), 'error');
+          setStatus('error', 'failed');
+          setRunning(false);
+          clearInterval(timerInterval);
+        });
+    }
+
+    let lastStdoutLen = 0;
+    let lastStderrLen = 0;
+
+    function pollTask(taskId, timerInterval) {
+      fetch(`./api/task/${taskId}`)
+        .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+        .then(data => {
+          if (data.stdout && data.stdout.length > lastStdoutLen) {
+            const newOut = data.stdout.substring(lastStdoutLen);
+            lastStdoutLen = data.stdout.length;
+            newOut.split('\n').forEach(line => addLine(line, 'stdout'));
+          }
+          if (data.stderr && data.stderr.length > lastStderrLen) {
+            const newErr = data.stderr.substring(lastStderrLen);
+            lastStderrLen = data.stderr.length;
+            newErr.split('\n').forEach(line => addLine(line, 'stderr'));
+          }
+
+          if (data.status === 'done' || data.status === 'error' || data.status === 'timeout' || data.status === 'killed') {
+            clearInterval(pollTimer);
+            clearInterval(timerInterval);
+            pollTimer = null;
+            currentTaskId = null;
+            setRunning(false);
+
+            const statusKeyMap = {
+              done: 'done',
+              error: 'error',
+              timeout: 'timeout',
+              killed: 'killed'
+            };
+
+            setStatus(data.status, statusKeyMap[data.status] || data.status);
+            setExitCode(data.exit_code);
+
+            addLine('', '');
+
+            const summaryKeyMap = {
+              done: 'statusDone',
+              error: 'statusError',
+              timeout: 'statusTimeout',
+              killed: 'statusKilled'
+            };
+            const summaryKey = summaryKeyMap[data.status] || 'statusError';
+            addLine(t(summaryKey, { code: data.exit_code }), data.exit_code === 0 ? 'info' : 'error');
+          }
+        })
+        .catch(() => { });
+    }
+
+    function doStop() {
+      if (!currentTaskId) return;
+      fetch(`./api/task/${currentTaskId}/stop`)
+        .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+        .then(() => {
+          addLine('', '');
+          addLine(t('userKilled'), 'error');
+        })
+        .catch(() => { });
+    }
+
+    applyTheme();
+    applyI18n();
+
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+    try {
+      window.addEventListener('storage', function (e) {
+        if (e.key === 'fnos-theme-mode') applyTheme();
+      });
+    } catch (e) { }
+
+    if (!openedPath) {
+      addLine(t('noFilePath'), 'error');
+      setStatus('error', 'noFilePathStatus');
+    } else {
+      loadFileInfo();
+      argsInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') doExecute();
+      });
+    }
+  </script>
+</body>
+
+</html>

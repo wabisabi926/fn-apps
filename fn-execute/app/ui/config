@@ -1,0 +1,32 @@
+{
+  ".url": {
+    "fn-execute.Application": {
+      "title": "${entry.title}",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "url": "/app/fn-execute",
+      "gatewaySocket": "fn-execute.sock",
+      "gatewayPrefix": "/app/fn-execute",
+      "allUsers": false,
+      "control": {
+        "accessPerm": "readonly",
+        "fullUrlPerm": "readonly"
+      },
+      "fileTypes": [
+        "sh",
+        "py",
+        "pl",
+        "rb",
+        "js",
+        "ts",
+        "lua",
+        "bash",
+        "zsh",
+        "fish",
+        "bin",
+        "run"
+      ],
+      "noDisplay": true
+    }
+  }
+}

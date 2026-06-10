@@ -1,0 +1,7 @@
+[common]
+display_name="执行器"
+desc="执行器可直接在可执行程序上右键执行"
+
+[entry]
+title="执行"
+
