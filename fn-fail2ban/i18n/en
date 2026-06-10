@@ -1,0 +1,6 @@
+[common]
+display_name="fail2ban"
+desc="fail2ban is an open-source intrusion prevention tool that protects Linux servers from brute-force attacks. It monitors log files, detects suspicious login attempts, and automatically bans malicious IP addresses, enhancing system security."
+
+[entry]
+title="fail2ban"

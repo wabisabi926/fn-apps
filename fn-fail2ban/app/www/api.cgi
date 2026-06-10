@@ -119,6 +119,7 @@ def setSection(filename, section, content):
     """Replace or append a section in an ini-style file without touching other sections.
 
     `content` should be the body lines (without the [section] header).
+    Handles duplicate sections by removing ALL occurrences before writing one.
     """
     try:
         if os.path.exists(filename):
@@ -127,41 +128,44 @@ def setSection(filename, section, content):
         else:
             lines = []
 
-        # find section start/end
-        start = None
-        end = None
-        for i, line in enumerate(lines):
-            s = line.strip()
-            if s.startswith('[') and s.endswith(']'):
-                name = s[1:-1].strip()
-                if name == section:
-                    start = i
-                    # find end
-                    for j in range(i + 1, len(lines)):
-                        sj = lines[j].strip()
-                        if sj.startswith('[') and sj.endswith(']'):
-                            end = j
-                            break
-                    if end is None:
-                        end = len(lines)
-                    break
-
-        new_section_lines = [f'[{section}]\n']
+        import re
         if content:
-            for ln in content.splitlines():
-                new_section_lines.append(ln.rstrip('\n') + '\n')
+            content = re.sub(r'^\[.+\]\s*\n?', '', content, count=1, flags=re.MULTILINE)
 
-        if start is None:
-            # append
-            # ensure file ends with newline
-            if lines and not lines[-1].endswith('\n'):
-                lines[-1] = lines[-1] + '\n'
-            lines.extend(new_section_lines)
-        else:
-            lines = lines[:start] + new_section_lines + lines[end:]
+        out_lines = []
+        i = 0
+        found = False
+        while i < len(lines):
+            s = lines[i].strip()
+            if s.startswith('[') and s.endswith(']') and s[1:-1].strip() == section:
+                if not found:
+                    new_section_lines = [f'[{section}]\n']
+                    if content:
+                        for ln in content.splitlines():
+                            new_section_lines.append(ln.rstrip('\n') + '\n')
+                    out_lines.extend(new_section_lines)
+                    found = True
+                i += 1
+                while i < len(lines):
+                    sj = lines[i].strip()
+                    if sj.startswith('[') and sj.endswith(']'):
+                        break
+                    i += 1
+                continue
+            out_lines.append(lines[i])
+            i += 1
+
+        if not found:
+            new_section_lines = [f'[{section}]\n']
+            if content:
+                for ln in content.splitlines():
+                    new_section_lines.append(ln.rstrip('\n') + '\n')
+            if out_lines and not out_lines[-1].endswith('\n'):
+                out_lines[-1] = out_lines[-1] + '\n'
+            out_lines.extend(new_section_lines)
 
         with open(filename, 'w', encoding='utf-8') as fh:
-            fh.writelines(lines)
+            fh.writelines(out_lines)
         return True
     except Exception:
         return False
@@ -261,6 +265,34 @@ def main():
 
         req['active'] = (status == 'active')
         req['jails'] = []
+
+        config_warnings = []
+        try:
+            fn = FNOS_PATH
+            if os.path.exists(fn):
+                with open(fn, 'r', encoding='utf-8', errors='ignore') as fh:
+                    flines = fh.readlines()
+                seen = {}
+                for line in flines:
+                    s = line.strip()
+                    if s.startswith('[') and s.endswith(']'):
+                        name = s[1:-1].strip()
+                        seen[name] = seen.get(name, 0) + 1
+                dupes = [k for k, v in seen.items() if v > 1]
+                if dupes:
+                    config_warnings.append('duplicate_sections:' + ','.join(dupes))
+                for line in flines:
+                    ls = line.strip()
+                    if ls.startswith('logpath') and '=' in ls:
+                        lp = ls.split('=', 1)[1].strip()
+                        for p in lp.split(','):
+                            p = p.strip()
+                            if p and p not in ('journal', 'systemd') and not p.startswith('journal') and not os.path.exists(p):
+                                config_warnings.append('missing_log:' + p)
+        except Exception:
+            pass
+        req['config_warnings'] = config_warnings
+
         # Jails
         jailfiles = getFileJails()
         loadjails = getLoadJails()
@@ -425,7 +457,6 @@ def main():
         return
 
     if action == 'write':
-        # write entire content to fnOS.conf (all jails stored in this single file)
         jail = req.get('jail', '')
         content = req.get('content', '')
         if not jail:
@@ -435,30 +466,77 @@ def main():
             respond({'success': False, 'message': '缺少 content 参数'})
             return
 
-        # write the section into fnOS.conf and test by reloading fail2ban
         try:
             fn = FNOS_PATH
             if not os.path.exists(fn):
-                #respond({'success': False, 'message': '未找到 fnOS.conf'})
-                #return
                 open(fn, 'a').close()
             shutil.copy2(fn, fn + '.bak')
             setSection(fn, jail, content)
+
+            created_logs = []
+            for line in content.splitlines():
+                line = line.strip()
+                if line.startswith('logpath') and '=' in line:
+                    lp = line.split('=', 1)[1].strip()
+                    for p in lp.split(','):
+                        p = p.strip()
+                        if p and not os.path.exists(p):
+                            try:
+                                pdir = os.path.dirname(p)
+                                if pdir and not os.path.exists(pdir):
+                                    os.makedirs(pdir, exist_ok=True)
+                                open(p, 'a').close()
+                                created_logs.append(p)
+                            except Exception:
+                                pass
+
             rc, out, err = run_command(['fail2ban-client', 'reload'])
             if rc == 0:
-                # remove backup
                 try:
                     if os.path.exists(fn + '.bak'):
                         os.remove(fn + '.bak')
                 except Exception:
                     pass
                 try:
-                    audit_log('write', jail=jail, note='write_ok')
+                    note = 'write_ok'
+                    if created_logs:
+                        note += ' created_log: ' + ', '.join(created_logs)
+                    audit_log('write', jail=jail, note=note)
                 except Exception:
                     pass
-                respond({'success': True, 'message': '写入成功'})
+                msg = '写入成功'
+                if created_logs:
+                    msg += '（已创建日志文件: ' + ', '.join(created_logs) + '）'
+                respond({'success': True, 'message': msg, 'created_logs': created_logs})
                 return
-            # reload failed: restore backup
+
+            backup_has_dupes = False
+            try:
+                if os.path.exists(fn + '.bak'):
+                    with open(fn + '.bak', 'r', encoding='utf-8', errors='ignore') as fh:
+                        seen = {}
+                        for line in fh:
+                            s = line.strip()
+                            if s.startswith('[') and s.endswith(']'):
+                                name = s[1:-1].strip()
+                                seen[name] = seen.get(name, 0) + 1
+                        backup_has_dupes = any(v > 1 for v in seen.values())
+            except Exception:
+                pass
+
+            if backup_has_dupes:
+                try:
+                    if os.path.exists(fn + '.bak'):
+                        os.remove(fn + '.bak')
+                except Exception:
+                    pass
+                try:
+                    audit_log('write', jail=jail, note=('write_reload_fail_no_rollback: ' + (err or '').strip()))
+                except Exception:
+                    pass
+                respond({'success': False, 'message': '配置已写入但重载失败', 'output': err})
+                return
+
             try:
                 if os.path.exists(fn + '.bak'):
                     shutil.move(fn + '.bak', fn)
@@ -519,8 +597,87 @@ def main():
             respond({'success': False, 'message': str(e)})
         return
 
+    if action == 'start':
+        rc, out, err = run_command(['systemctl', 'start', 'fail2ban'])
+        if rc == 0:
+            try:
+                audit_log('start', note='start_ok')
+            except Exception:
+                pass
+            respond({'success': True, 'message': '启动成功'})
+        else:
+            try:
+                audit_log('start', note=('start_fail: ' + (err or '').strip()))
+            except Exception:
+                pass
+            respond({'success': False, 'message': '启动失败', 'output': err})
+        return
+
+    if action == 'stop':
+        rc, out, err = run_command(['systemctl', 'stop', 'fail2ban'])
+        if rc == 0:
+            try:
+                audit_log('stop', note='stop_ok')
+            except Exception:
+                pass
+            respond({'success': True, 'message': '停止成功'})
+        else:
+            try:
+                audit_log('stop', note=('stop_fail: ' + (err or '').strip()))
+            except Exception:
+                pass
+            respond({'success': False, 'message': '停止失败', 'output': err})
+        return
+
+    if action == 'toggle':
+        jail = req.get('jail', '')
+        enabled = req.get('enabled', True)
+        if not jail:
+            respond({'success': False, 'message': '缺少 jail 参数'})
+            return
+        fn = FNOS_PATH
+        if not os.path.exists(fn):
+            respond({'success': False, 'message': '未找到 fnOS.conf'})
+            return
+        try:
+            content = getSection(fn, jail)
+            if content is None or content == '':
+                respond({'success': False, 'message': '未找到对应的 Jail 节'})
+                return
+            if enabled:
+                content = content.replace('enabled = false', 'enabled = true').replace('enabled = False', 'enabled = true').replace('enabled=false', 'enabled=true').replace('enabled=False', 'enabled=true')
+                if 'enabled' not in content:
+                    content = 'enabled = true\n' + content
+            else:
+                content = content.replace('enabled = true', 'enabled = false').replace('enabled = True', 'enabled = false').replace('enabled=true', 'enabled=false').replace('enabled=True', 'enabled=false')
+                if 'enabled' not in content:
+                    content = 'enabled = false\n' + content
+            shutil.copy2(fn, fn + '.bak')
+            setSection(fn, jail, content)
+            rc, out, err = run_command(['fail2ban-client', 'reload'])
+            if rc == 0:
+                try:
+                    if os.path.exists(fn + '.bak'):
+                        os.remove(fn + '.bak')
+                except Exception:
+                    pass
+                try:
+                    audit_log('toggle', jail=jail, note=('enabled=' + str(enabled)))
+                except Exception:
+                    pass
+                respond({'success': True, 'message': '操作成功'})
+                return
+            try:
+                if os.path.exists(fn + '.bak'):
+                    shutil.move(fn + '.bak', fn)
+            except Exception:
+                pass
+            respond({'success': False, 'message': '重载失败', 'output': err})
+        except Exception as e:
+            respond({'success': False, 'message': str(e)})
+        return
+
     if action == 'reload':
-        # try graceful reload via fail2ban-client, fallback to systemctl restart
         rc, out, err = run_command(['fail2ban-client', 'reload'])
         if rc == 0:
             try:
@@ -533,7 +690,7 @@ def main():
             audit_log('reload', note=('reload_fail: ' + (err or '').strip()))
         except Exception:
             pass
-        respond({'success': False, 'message': 'reload/restart 失败', 'fail2ban-client': err, 'systemctl': err2})
+        respond({'success': False, 'message': 'reload/restart 失败', 'fail2ban-client': err})
         return
 
     # audit fetch
@@ -563,11 +720,125 @@ def main():
             respond({'success': False, 'message': str(e)})
         return
 
+    if action == 'log':
+        lines_count = int(req.get('lines', 100) or 100)
+        log_path = '/var/log/fail2ban.log'
+        lines = []
+        try:
+            if os.path.exists(log_path):
+                with open(log_path, 'r', encoding='utf-8', errors='ignore') as fh:
+                    all_lines = fh.readlines()
+                    lines = [l.rstrip('\n') for l in all_lines[-lines_count:]]
+            respond({'success': True, 'lines': lines})
+        except Exception as e:
+            respond({'success': False, 'message': str(e)})
+        return
+
     if action == 'audit_clear':
         try:
             if os.path.exists(AUDIT_LOG):
                 os.remove(AUDIT_LOG)
             respond({'success': True, 'message': '审计日志已清空'})
+        except Exception as e:
+            respond({'success': False, 'message': str(e)})
+        return
+
+    if action == 'check_logpath':
+        paths = req.get('paths', [])
+        if isinstance(paths, str):
+            paths = [paths]
+        results = {}
+        for p in paths:
+            p = p.strip()
+            if not p:
+                continue
+            results[p] = os.path.exists(p)
+        respond({'success': True, 'results': results})
+        return
+
+    if action == 'repair':
+        try:
+            fn = FNOS_PATH
+            if not os.path.exists(fn):
+                respond({'success': False, 'message': '未找到 fnOS.conf'})
+                return
+            with open(fn, 'r', encoding='utf-8', errors='ignore') as fh:
+                lines = fh.readlines()
+            sections = {}
+            current = None
+            for line in lines:
+                s = line.strip()
+                if s.startswith('[') and s.endswith(']'):
+                    current = s[1:-1].strip()
+                    if current not in sections:
+                        sections[current] = []
+                    sections[current].append(line)
+                elif current is not None:
+                    sections[current].append(line)
+            dupes = [k for k, v in sections.items() if sum(1 for l in v if l.strip().startswith('[')) > 1]
+            if not dupes:
+                respond({'success': True, 'message': '配置文件无重复段', 'duplicates': []})
+                return
+            for d in dupes:
+                body = []
+                skip = True
+                for l in sections[d]:
+                    ls = l.strip()
+                    if ls.startswith('[') and ls.endswith(']') and ls[1:-1].strip() == d:
+                        if skip:
+                            body.append(l)
+                            skip = False
+                        continue
+                    if not skip:
+                        body.append(l)
+                sections[d] = body
+            out_lines = []
+            written = set()
+            for line in lines:
+                s = line.strip()
+                if s.startswith('[') and s.endswith(']'):
+                    name = s[1:-1].strip()
+                    if name in dupes and name in written:
+                        continue
+                    written.add(name)
+                out_lines.append(line)
+            with open(fn, 'w', encoding='utf-8') as fh:
+                fh.writelines(out_lines)
+
+            created_logs = []
+            with open(fn, 'r', encoding='utf-8', errors='ignore') as fh:
+                for line in fh:
+                    ls = line.strip()
+                    if ls.startswith('logpath') and '=' in ls:
+                        lp = ls.split('=', 1)[1].strip()
+                        for p in lp.split(','):
+                            p = p.strip()
+                            if p and p not in ('journal', 'systemd') and not p.startswith('journal') and not os.path.exists(p):
+                                try:
+                                    pdir = os.path.dirname(p)
+                                    if pdir and not os.path.exists(pdir):
+                                        os.makedirs(pdir, exist_ok=True)
+                                    open(p, 'a').close()
+                                    created_logs.append(p)
+                                except Exception:
+                                    pass
+
+            rc, out, err = run_command(['fail2ban-client', 'reload'])
+            if rc == 0:
+                try:
+                    audit_log('repair', note='repair_ok')
+                except Exception:
+                    pass
+                msg = '修复成功'
+                if created_logs:
+                    msg += '（已创建日志文件: ' + ', '.join(created_logs) + '）'
+                respond({'success': True, 'message': msg, 'duplicates': dupes, 'created_logs': created_logs})
+            else:
+                try:
+                    audit_log('repair', note=('repair_reload_fail: ' + (err or '').strip()))
+                except Exception:
+                    pass
+                respond({'success': False, 'message': '已去重但重载失败', 'duplicates': dupes, 'output': err})
         except Exception as e:
             respond({'success': False, 'message': str(e)})
         return

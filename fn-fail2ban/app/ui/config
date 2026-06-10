@@ -1,7 +1,7 @@
 {
   ".url": {
     "fn-fail2ban.Application": {
-      "title": "fn-fail2ban",
+      "title": "${entry.title}",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
       "url": "/cgi/ThirdParty/fn-fail2ban/index.cgi/",

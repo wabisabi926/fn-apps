@@ -3,7 +3,7 @@
 ### This script is called before the user upgrades the application.
 
 apt update
-apt upgrade -y python3-systemd fail2ban
+apt install --only-upgrade -y python3-systemd fail2ban
 [ $? -ne 0 ] && echo "Failed to upgrade fail2ban package." >$TRIM_TEMP_LOGFILE && exit 1
 
 exit 0
