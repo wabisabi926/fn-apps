@@ -251,7 +251,7 @@ const state = {
   active: "boot",
   data: {},
   language: "zh-CN",
-  theme: "dark",
+  theme: "light",
   saving: false,
 };
 
@@ -311,6 +311,8 @@ function normalizeTheme(value) {
   const theme = safeDecode(value).toLowerCase();
   if (theme.includes("dark") || theme === "night") return "dark";
   if (theme.includes("light") || theme === "day") return "light";
+  if (theme === "10") return "light";
+  if (theme === "20") return "dark";
   if (theme === "system" || theme === "auto" || theme === "os") {
     return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }

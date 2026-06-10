@@ -31,7 +31,7 @@ const toastEl = document.getElementById("toast");
 
 const state = {
   language: "zh-CN",
-  theme: "dark",
+  theme: "light",
 };
 
 const I18N = {
@@ -300,6 +300,8 @@ function normalizeTheme(value) {
   const theme = safeDecode(value).toLowerCase();
   if (theme.includes("dark") || theme === "night") return "dark";
   if (theme.includes("light") || theme === "day") return "light";
+  if (theme === "10") return "light";
+  if (theme === "20") return "dark";
   if (theme === "system" || theme === "auto" || theme === "os") {
     return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
@@ -978,5 +980,4 @@ document.addEventListener("change", async (event) => {
 applyPreferences();
 window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", () => applyPreferences());
 window.addEventListener("storage", () => applyPreferences({ rerender: true }));
-setInterval(() => applyPreferences({ rerender: true }), 1500);
 refreshStatus();

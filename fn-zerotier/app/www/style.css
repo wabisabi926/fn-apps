@@ -16,10 +16,13 @@
   --accent-soft: rgba(22, 119, 255, 0.16);
   --danger: #ff5c6c;
   --danger-text: #a92836;
+  --warn: #cc7a00;
   --success: #19a565;
   --warning: #b7791f;
   --hover: #f1f3f6;
   --active: #e9f2ff;
+  --icon-bg: #eef1f5;
+  --icon-text: #69717c;
   --button: #eef0f3;
   --button-hover: #e3e6ea;
   --button-text: #30343a;
@@ -44,10 +47,13 @@ html[data-theme="dark"] {
   --accent-soft: rgba(22, 119, 255, 0.16);
   --danger: #ff5c6c;
   --danger-text: #ffd8dd;
+  --warn: #e6a030;
   --success: #76d69e;
   --warning: #ffd166;
   --hover: #18191b;
   --active: #202124;
+  --icon-bg: #303236;
+  --icon-text: #e8e8ea;
   --button: #303133;
   --button-hover: #38393c;
   --button-text: #dedfe1;
@@ -387,7 +393,7 @@ textarea {
 .moon-create-row {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.5fr) minmax(0, 2fr) minmax(0, 1fr) 64px minmax(0, 1fr);
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 

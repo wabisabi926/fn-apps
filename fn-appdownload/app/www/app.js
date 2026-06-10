@@ -1,8 +1,6 @@
 const API_ENDPOINT = location.pathname.includes("/app/fn-appdownload")
   ? "/app/fn-appdownload/api"
-  : location.pathname.includes("index.cgi")
-    ? "../www/api.cgi"
-    : "./api.cgi";
+  : "./api";
 
 const state = {
   apps: [],
@@ -337,6 +335,8 @@ function normalizeTheme(value) {
   const theme = safeDecode(value).toLowerCase();
   if (theme.includes("dark") || theme === "night") return "dark";
   if (theme.includes("light") || theme === "day") return "light";
+  if (theme === "10") return "light";
+  if (theme === "20") return "dark";
   if (theme === "system" || theme === "auto" || theme === "os") {
     return prefersDarkTheme() ? "dark" : "light";
   }
@@ -878,4 +878,3 @@ window.addEventListener("load", async () => {
 
 themeMedia()?.addEventListener?.("change", () => applyPreferences());
 window.addEventListener("storage", () => applyPreferences({ rerender: true }));
-setInterval(() => applyPreferences({ rerender: true }), 1500);

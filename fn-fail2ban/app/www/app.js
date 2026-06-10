@@ -1439,6 +1439,10 @@ document.addEventListener('DOMContentLoaded', () => {
     applyPreferences({ rerender: true });
   });
 
+  window.addEventListener('storage', () => {
+    applyPreferences({ rerender: true });
+  });
+
   document.addEventListener('keydown', e => {
     if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
       e.preventDefault();

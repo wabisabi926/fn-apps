@@ -2,7 +2,7 @@ const API = "/app/fn-wifi-hotspot/api";
 
 const state = {
   language: "zh-CN",
-  theme: "dark",
+  theme: "light",
   config: null,
   status: null,
   channels: { bg: [], a: [] },
@@ -172,6 +172,8 @@ function normalizeTheme(value) {
   const theme = safeDecode(value).toLowerCase();
   if (theme.includes("dark") || theme === "night") return "dark";
   if (theme.includes("light") || theme === "day") return "light";
+  if (theme === "10") return "light";
+  if (theme === "20") return "dark";
   if (["system", "auto", "os"].includes(theme)) return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   return "";
 }
@@ -457,7 +459,6 @@ els.clients.addEventListener("click", async (event) => {
 applyPreferences();
 window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", () => applyPreferences());
 window.addEventListener("storage", () => applyPreferences({ rerender: true }));
-setInterval(() => applyPreferences({ rerender: true }), 1500);
 setInterval(() => refreshLiveData(), 5000);
 setBusy(true);
 loadAll().catch((error) => {

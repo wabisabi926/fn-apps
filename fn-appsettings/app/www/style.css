@@ -16,6 +16,7 @@
   --accent-soft: rgba(22, 119, 255, 0.16);
   --danger: #ff5c6c;
   --danger-text: #a92836;
+  --warn: #cc7a00;
   --hover: #f1f3f6;
   --active: #e9f2ff;
   --icon-bg: #eef1f5;
@@ -44,6 +45,7 @@ html[data-theme="dark"] {
   --accent-soft: rgba(22, 119, 255, 0.16);
   --danger: #ff5c6c;
   --danger-text: #ffd8dd;
+  --warn: #e6a030;
   --hover: #18191b;
   --active: #202124;
   --icon-bg: #303236;
