@@ -370,10 +370,10 @@ def decode_chunked(data):
     return bytes(output)
 
 
-def unix_http(method, path, payload=None, timeout=15):
+def unix_http(method, path, payload=None, timeout=15, token_override=None):
     if not os.path.exists(APP_CENTER_SOCKET):
         raise RuntimeError(f"socket not found: {APP_CENTER_SOCKET}")
-    token = incoming_token()
+    token = token_override or incoming_token()
     if not token:
         raise RuntimeError(
             "app-center token not found; open the app from fnOS desktop so gateway headers can be captured"
@@ -587,11 +587,12 @@ def latest_map(latest_raw):
     return result
 
 
-def normalize_official_item(item, latest_by_app, tasks):
-    settings = read_settings()
+def normalize_official_item(item, latest_by_app, tasks, override_version=None, override_source_id=None, settings=None):
+    if settings is None:
+        settings = read_settings()
     app_id = str(pick(item, ("appName", "name", "packageName", "id", "app_id")))
     latest = latest_by_app.get(app_id, {}) if app_id else {}
-    version = str(
+    version = override_version or str(
         pick(
             latest,
             ("version", "versionName", "releaseVersion"),
@@ -607,6 +608,13 @@ def normalize_official_item(item, latest_by_app, tasks):
     downloaded = target.exists()
     if downloaded:
         status = "downloaded"
+    source_id = override_source_id or str(
+        pick(
+            latest,
+            ("sourceID", "sourceId", "source_id"),
+            pick(item, ("sourceID", "sourceId", "source_id"), ""),
+        )
+    )
     return {
         "id": app_id,
         "store": "official",
@@ -620,13 +628,7 @@ def normalize_official_item(item, latest_by_app, tasks):
         "version": version,
         "icon": pick(item, ("icon", "iconUrl", "icon_url", "logo"), ""),
         "source": "官方商店",
-        "sourceID": str(
-            pick(
-                latest,
-                ("sourceID", "sourceId", "source_id"),
-                pick(item, ("sourceID", "sourceId", "source_id"), ""),
-            )
-        ),
+        "sourceID": source_id,
         "packageSourceType": "cloud",
         "taskId": task.get("taskId", ""),
         "status": status,
@@ -637,16 +639,111 @@ def normalize_official_item(item, latest_by_app, tasks):
     }
 
 
-def official_apps():
+def expand_upgrade_versions(item):
+    upgrade_info = item.get("upgradeInfo")
+    if not upgrade_info:
+        return []
+    if isinstance(upgrade_info, dict):
+        upgrade_info = [upgrade_info]
+    if not isinstance(upgrade_info, list):
+        return []
+    entries = []
+    for entry in upgrade_info:
+        if not isinstance(entry, dict):
+            continue
+        ver = str(
+            entry.get("version")
+            or entry.get("versionName")
+            or entry.get("releaseVersion")
+            or ""
+        ).strip()
+        if not ver:
+            continue
+        source_id = str(
+            entry.get("sourceID")
+            or entry.get("sourceId")
+            or entry.get("source_id")
+            or ""
+        ).strip()
+        entries.append({"version": ver, "sourceID": source_id})
+    return entries
+
+
+def official_apps(settings=None, token=None):
+    if settings is None:
+        settings = read_settings()
     tasks = read_tasks()["tasks"]
-    app_raw = unix_http("GET", "/app-center/v1/app/list?language=zh-CN")
-    latest_raw = unix_http("GET", "/app-center/v1/app/latest-release?language=zh-CN")
+    app_raw_box = [None]
+    latest_raw_box = [None]
+    app_raw_error = [None]
+    latest_raw_error = [None]
+
+    def fetch_app_list():
+        try:
+            app_raw_box[0] = unix_http("GET", "/app-center/v1/app/list?language=zh-CN", token_override=token)
+        except Exception as exc:
+            app_raw_error[0] = exc
+
+    def fetch_latest():
+        try:
+            latest_raw_box[0] = unix_http("GET", "/app-center/v1/app/latest-release?language=zh-CN", token_override=token)
+        except Exception as exc:
+            latest_raw_error[0] = exc
+
+    t1 = threading.Thread(target=fetch_app_list, daemon=True)
+    t2 = threading.Thread(target=fetch_latest, daemon=True)
+    t1.start()
+    t2.start()
+    t1.join(timeout=20)
+    t2.join(timeout=20)
+
+    app_raw = app_raw_box[0] or {}
+    latest_raw = latest_raw_box[0] or {}
+    if app_raw_error[0] and not app_raw:
+        raise app_raw_error[0]
     latest_by_app = latest_map(latest_raw)
-    apps = [
-        normalize_official_item(item, latest_by_app, tasks)
-        for item in first_array(app_raw)
-    ]
-    return {"apps": apps, "raw": {"list": app_raw, "latestRelease": latest_raw}}
+    try:
+        VAR_DIR.mkdir(parents=True, exist_ok=True)
+        (VAR_DIR / "debug_app_list.json").write_text(
+            json.dumps(app_raw, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception:
+        pass
+    apps = []
+    seen_keys = set()
+    official_ids = set()
+    for item in first_array(app_raw):
+        main_app = normalize_official_item(item, latest_by_app, tasks, settings=settings)
+        if main_app["id"]:
+            official_ids.add(main_app["id"])
+        main_key = task_key("official", main_app["id"], main_app["version"])
+        if main_key not in seen_keys:
+            seen_keys.add(main_key)
+            apps.append(main_app)
+        extra_entries = expand_upgrade_versions(item)
+        if extra_entries:
+            main_sid = main_app.get("sourceID", "")
+            seen_keys.add(f"{main_app['id']}:{main_app['version']}:{main_sid}")
+        for entry in extra_entries:
+            ver = entry["version"]
+            sid = entry.get("sourceID") or ""
+            dedup_key = f"{main_app['id']}:{ver}:{sid}"
+            if dedup_key in seen_keys:
+                continue
+            seen_keys.add(dedup_key)
+            ver_key = task_key("official", main_app["id"], ver)
+            if ver_key not in seen_keys:
+                seen_keys.add(ver_key)
+            override_sid = sid or None
+            apps.append(
+                normalize_official_item(
+                    item, latest_by_app, tasks,
+                    override_version=ver,
+                    override_source_id=override_sid,
+                    settings=settings,
+                )
+            )
+    return {"apps": apps, "official_ids": official_ids, "raw": {"list": app_raw, "latestRelease": latest_raw}}
 
 
 def load_source_json(url):
@@ -656,13 +753,23 @@ def load_source_json(url):
         )
     if url.startswith("/") and Path(url).exists():
         return json.loads(Path(url).read_text(encoding="utf-8-sig"))
-    request = urllib.request.Request(url, headers={"User-Agent": f"{APP_NAME}/1.0"})
+    separator = "&" if "?" in url else "?"
+    cache_bust_url = f"{url}{separator}_={int(time.time())}"
+    request = urllib.request.Request(
+        cache_bust_url,
+        headers={
+            "User-Agent": f"{APP_NAME}/1.0",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
     with urllib.request.urlopen(request, timeout=20) as response:
         return json.loads(response.read().decode("utf-8-sig"))
 
 
-def normalize_third_party_item(app_id, item, source_name):
-    settings = read_settings()
+def normalize_third_party_item(app_id, item, source_name, settings=None):
+    if settings is None:
+        settings = read_settings()
     version = str(pick(item, ("version", "versionName"), ""))
     download_path = download_path_for(app_id, version, settings)
     return {
@@ -682,10 +789,68 @@ def normalize_third_party_item(app_id, item, source_name):
     }
 
 
-def third_party_apps():
-    settings = read_settings()
+def _parse_stem(stem, known_ids=None):
+    if known_ids:
+        sorted_ids = sorted(known_ids, key=len, reverse=True)
+        for aid in sorted_ids:
+            prefix = aid + "-"
+            if stem.startswith(prefix):
+                ver = stem[len(prefix):]
+                if ver:
+                    return aid, ver
+    last_dash = stem.rfind("-")
+    if last_dash < 1:
+        return None, None
+    app_id = stem[:last_dash]
+    version = stem[last_dash + 1:]
+    if not app_id or not version:
+        return None, None
+    return app_id, version
+
+
+def orphaned_apps(known_keys, official_ids=None, all_known_ids=None, settings=None):
+    if official_ids is None:
+        official_ids = set()
+    if settings is None:
+        settings = read_settings()
+    ddir = download_dir(settings)
+    if not ddir.is_dir():
+        return []
+    apps = []
+    for entry in sorted(ddir.iterdir()):
+        if not entry.is_file() or entry.suffix != ".fpk":
+            continue
+        stem = entry.stem
+        app_id, version = _parse_stem(stem, all_known_ids)
+        if not app_id or not version:
+            continue
+        key = task_key("thirdparty", app_id, version)
+        if key in known_keys:
+            continue
+        if app_id in official_ids:
+            continue
+        apps.append({
+            "id": app_id,
+            "store": "thirdparty",
+            "name": app_id,
+            "version": version,
+            "icon": "",
+            "source": "",
+            "downloadUrl": "",
+            "status": "downloaded",
+            "downloaded": True,
+            "orphaned": True,
+            "path": str(entry),
+        })
+    return apps
+
+
+def third_party_apps(official_ids=None, settings=None, token=None):
+    if settings is None:
+        settings = read_settings()
     apps = []
     errors = []
+    known_keys = set()
     for source in settings.get("thirdPartySources", []):
         if not source.get("enabled", True):
             continue
@@ -701,9 +866,37 @@ def third_party_apps():
                 entries = [(str(index), item) for index, item in enumerate(data or [])]
             for app_id, item in entries:
                 if isinstance(item, dict):
-                    apps.append(normalize_third_party_item(str(app_id), item, name))
+                    apps.append(normalize_third_party_item(str(app_id), item, name, settings=settings))
+                    version = str(pick(item, ("version", "versionName"), ""))
+                    known_keys.add(task_key("thirdparty", str(app_id), version))
         except Exception as exc:
             errors.append({"source": name, "url": url, "message": str(exc)})
+    if official_ids is None:
+        official_ids = set()
+        try:
+            official_raw = unix_http("GET", "/app-center/v1/app/list?language=zh-CN", token_override=token)
+            for item in first_array(official_raw):
+                app_id = str(pick(item, ("appName", "name", "packageName", "id", "app_id")))
+                if app_id:
+                    official_ids.add(app_id)
+        except Exception:
+            pass
+    appcenter_dir = Path("/vol1/@appcenter")
+    if appcenter_dir.is_dir():
+        for entry in appcenter_dir.iterdir():
+            if entry.is_dir() and not entry.name.startswith("."):
+                official_ids.add(entry.name)
+    appmeta_dir = Path("/vol1/@appmeta")
+    if appmeta_dir.is_dir():
+        for entry in appmeta_dir.iterdir():
+            if entry.is_dir() and not entry.name.startswith("."):
+                official_ids.add(entry.name)
+    all_known_ids = set()
+    for a in apps:
+        if a.get("id"):
+            all_known_ids.add(a["id"])
+    all_known_ids.update(official_ids)
+    apps.extend(orphaned_apps(known_keys, official_ids, all_known_ids, settings=settings))
     return {"apps": apps, "errors": errors}
 
 
@@ -873,7 +1066,7 @@ def refresh_official_status(task_id):
     return result
 
 
-def status_payload(apps=None):
+def status_payload(apps=None, skip_remote=False):
     tasks = read_tasks()
     changed = False
     for key, task in list(tasks["tasks"].items()):
@@ -892,6 +1085,8 @@ def status_payload(apps=None):
         if task.get("deleted"):
             continue
         if task.get("store") != "official" or not task.get("taskId"):
+            continue
+        if skip_remote:
             continue
         try:
             raw = refresh_official_status(str(task["taskId"]))
@@ -973,16 +1168,70 @@ def dispatch():
         json_response({"ok": True, "settings": read_settings()})
     elif action == "save-settings":
         json_response({"ok": True, "settings": save_settings(payload)})
+    elif action == "app-list":
+        settings = read_settings()
+        token = incoming_token()
+        official_result_box = [None]
+        official_error_box = [None]
+        thirdparty_result_box = [None]
+        thirdparty_error_box = [None]
+
+        def fetch_official():
+            try:
+                official_result_box[0] = official_apps(settings=settings, token=token)
+            except Exception as exc:
+                official_error_box[0] = exc
+
+        def fetch_thirdparty():
+            try:
+                thirdparty_result_box[0] = third_party_apps(settings=settings, token=token)
+            except Exception as exc:
+                thirdparty_error_box[0] = exc
+
+        t_official = threading.Thread(target=fetch_official, daemon=True)
+        t_thirdparty = threading.Thread(target=fetch_thirdparty, daemon=True)
+        t_official.start()
+        t_thirdparty.start()
+        t_official.join(timeout=30)
+        t_thirdparty.join(timeout=30)
+
+        if official_error_box[0] and not official_result_box[0]:
+            raise official_error_box[0]
+
+        official_result = official_result_box[0] or {}
+        official_ids = official_result.get("official_ids", set())
+        thirdparty_result = thirdparty_result_box[0] or {}
+        thirdparty_errors = thirdparty_result.get("errors", [])
+        if thirdparty_error_box[0]:
+            thirdparty_errors.append({"source": "thirdparty", "message": str(thirdparty_error_box[0])})
+
+        all_apps = official_result.get("apps", []) + thirdparty_result.get("apps", [])
+        tasks_data = status_payload(skip_remote=True)
+        json_response({
+            "ok": True,
+            "apps": all_apps,
+            "errors": thirdparty_errors,
+            "tasks": tasks_data.get("tasks", {}),
+            "files": tasks_data.get("files", {}),
+        })
     elif action == "official-list":
+        settings = read_settings()
+        token = incoming_token()
+        result = official_apps(settings=settings, token=token)
+        tasks_data = status_payload()
         json_response(
-            {"ok": True, **official_apps(), "tasks": status_payload().get("tasks", {})}
+            {"ok": True, "apps": result.get("apps", []), "tasks": tasks_data.get("tasks", {}), "raw": result.get("raw")}
         )
     elif action == "thirdparty-list":
+        settings = read_settings()
+        token = incoming_token()
+        result = third_party_apps(settings=settings, token=token)
+        tasks_data = status_payload()
         json_response(
             {
                 "ok": True,
-                **third_party_apps(),
-                "tasks": status_payload().get("tasks", {}),
+                **result,
+                "tasks": tasks_data.get("tasks", {}),
             }
         )
     elif action == "download":

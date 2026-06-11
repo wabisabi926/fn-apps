@@ -243,6 +243,7 @@ textarea {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
+  gap: 8px;
 }
 
 .top-refresh-btn {
@@ -256,7 +257,7 @@ textarea {
 
 .filter-field {
   display: flex;
-  flex: 1 1 0;
+  flex: 0 0 auto;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -284,8 +285,8 @@ textarea {
 }
 
 .filter-field select {
-  flex: 1 1 140px;
-  width: 100%;
+  flex: 0 0 auto;
+  width: auto;
   min-width: 120px;
   max-width: 200px;
   padding: 0 34px 0 12px;
@@ -422,6 +423,12 @@ textarea {
   width: 76px;
 }
 
+.icon-container {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
 .app-icon,
 .fallback-icon {
   width: 40px;
@@ -430,8 +437,15 @@ textarea {
 }
 
 .app-icon {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: block;
   object-fit: cover;
+}
+
+.app-icon.icon-err {
+  display: none;
 }
 
 .fallback-icon {
@@ -440,7 +454,9 @@ textarea {
   justify-content: center;
   background: var(--fallback-bg);
   color: var(--fallback-text);
+  font-size: 18px;
   font-weight: 800;
+  overflow: hidden;
 }
 
 .app-name {
@@ -486,6 +502,14 @@ textarea {
 .status-pill.failed {
   background: var(--red-bg);
   color: var(--red);
+}
+
+.orphaned-row .app-name {
+  color: var(--muted-2);
+}
+
+.orphaned-row .app-id {
+  color: var(--muted-2);
 }
 
 .download-btn {

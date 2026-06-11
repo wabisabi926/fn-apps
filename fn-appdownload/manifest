@@ -6,6 +6,7 @@ platform              = all
 source                = thirdparty
 desktop_uidir         = ui
 desktop_applaunchname = fn-appdownload.Application
+micro_app             = true
 maintainer            = Ing
 maintainer_url        = https://github.com/RROrg
 distributor           = RROrg

@@ -34,6 +34,8 @@ const I18N = {
     downloading: "下载中",
     failed: "失败",
     refresh: "刷新",
+    openDir: "打开目录",
+    openDirFailed: "无法打开文件管理器",
     icon: "图标",
     name: "名称",
     version: "版本",
@@ -89,6 +91,8 @@ const I18N = {
     downloading: "Downloading",
     failed: "Failed",
     refresh: "Refresh",
+    openDir: "Open Folder",
+    openDirFailed: "Unable to open file manager",
     icon: "Icon",
     name: "Name",
     version: "Version",
@@ -443,6 +447,118 @@ function showToast(message, isError = false) {
   toast._timer = setTimeout(() => toast.classList.add("hidden"), 3200);
 }
 
+let _fnAppRemote = null;
+let _fnAppConnectPromise = null;
+
+function connectFnApp() {
+  if (_fnAppRemote) return Promise.resolve(_fnAppRemote);
+  if (_fnAppConnectPromise) return _fnAppConnectPromise;
+
+  _fnAppConnectPromise = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      _fnAppConnectPromise = null;
+      reject(new Error("Connection timeout"));
+    }, 5000);
+
+    function onMessage(event) {
+      if (!event.data || event.data.penpal !== "synAck") return;
+      clearTimeout(timeout);
+
+      const { methodNames } = event.data;
+      const ackOrigin = event.origin === "null" ? "*" : event.origin;
+      window.parent.postMessage(
+        { penpal: "ack", methodNames: [], config: {} },
+        ackOrigin,
+      );
+
+      const callOrigin = ackOrigin;
+      const remote = {};
+      (methodNames || []).forEach((name) => {
+        remote[name] = (...args) => {
+          return new Promise((res, rej) => {
+            const id = Math.random().toString(36).slice(2);
+            function onReply(e) {
+              if (!e.data || e.data.penpal !== "reply" || e.data.id !== id)
+                return;
+              window.removeEventListener("message", onReply);
+              if (e.data.resolution === "fulfilled") {
+                res(e.data.returnValue);
+              } else {
+                const err = e.data.returnValue;
+                const error = new Error(
+                  err && err.message ? err.message : "Remote call failed",
+                );
+                if (err) Object.assign(error, err);
+                rej(error);
+              }
+            }
+            window.addEventListener("message", onReply);
+            window.parent.postMessage(
+              { penpal: "call", id, methodName: name, args },
+              callOrigin,
+            );
+          });
+        };
+      });
+
+      _fnAppRemote = remote;
+      resolve(remote);
+    }
+
+    function cleanup() {
+      window.removeEventListener("message", onMessage);
+    }
+
+    window.addEventListener("message", onMessage);
+    window.parent.postMessage({ penpal: "syn" }, "*");
+  });
+
+  return _fnAppConnectPromise;
+}
+
+function toFileManagerPath(path) {
+  try {
+    const parts = path.split("/");
+    const sharesIdx = parts.indexOf("shares");
+    if (sharesIdx >= 0 && parts.length > sharesIdx + 1) {
+      return "/vol1/@appshare/" + parts.slice(sharesIdx + 1).join("/");
+    }
+  } catch (_error) {}
+  return path;
+}
+
+function openFileManagerFallback(path) {
+  const fmPath = toFileManagerPath(path);
+  const tab = "app-share-files";
+  const anchor = encodeURIComponent(
+    "trim.file-manager/" + tab + "?key=" + tab + "&path=" + fmPath.replace(/^\//, ""),
+  );
+  const url = "/appview?anchor=" + anchor;
+  window.open(url, "_blank");
+}
+
+async function openFileManager(path) {
+  const fmPath = toFileManagerPath(path);
+  try {
+    const remote = await connectFnApp();
+    if (typeof remote.openFileManagerApp === "function") {
+      await remote.openFileManagerApp(fmPath);
+    } else if (typeof remote.openCustomApp === "function") {
+      await remote.openCustomApp("trim.file-manager", "app-share-files", {
+        params: {
+          key: "app-share-files",
+          path: fmPath.replace(/^\//, ""),
+        },
+      });
+    } else {
+      openFileManagerFallback(path);
+    }
+  } catch (_error) {
+    openFileManagerFallback(path);
+  }
+}
+
 function fallbackIcon(app) {
   const name = app.name || app.id || "?";
   return `<div class="fallback-icon">${escapeHtml(name.slice(0, 1).toUpperCase())}</div>`;
@@ -534,10 +650,11 @@ function renderRows() {
           ? app.id && app.version && app.sourceID
           : app.downloadUrl;
       const icon = app.icon
-        ? `<img class="app-icon" src="${escapeHtml(app.icon)}" alt="" loading="lazy" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden')">${fallbackIcon(app).replace("fallback-icon", "fallback-icon hidden")}`
+        ? `<div class="icon-container">${fallbackIcon(app)}<img class="app-icon" src="${escapeHtml(app.icon)}" alt="" loading="lazy" onerror="this.classList.add('icon-err')"></div>`
         : fallbackIcon(app);
+      const sourceLabel = escapeHtml(app.source || "-");
       return `
-      <tr>
+      <tr class="${app.orphaned ? "orphaned-row" : ""}">
         <td class="icon-cell">${icon}</td>
         <td>
           <div class="app-name">${escapeHtml(app.name || app.id)}</div>
@@ -545,7 +662,7 @@ function renderRows() {
         </td>
         <td>${escapeHtml(app.version || "-")}</td>
         <td>${app.store === "official" ? t("officialStore") : t("thirdPartyStore")}</td>
-        <td>${escapeHtml(app.source || "-")}</td>
+        <td>${sourceLabel}</td>
         <td><span class="status-pill ${kind}">${escapeHtml(statusText(app))}</span></td>
         <td>
           <button class="download-btn ${downloaded ? "delete-btn" : ""}" data-action="${downloaded ? "delete" : "download"}" data-app-key="${escapeHtml(taskKey(app))}" ${!downloaded && !canDownload ? "disabled" : ""} type="button">
@@ -571,34 +688,22 @@ async function loadSettings() {
 
 async function loadApps() {
   document.getElementById("summary").textContent = t("loading");
-  const [official, thirdparty] = await Promise.allSettled([
-    api("official-list"),
-    api("thirdparty-list"),
-  ]);
-  const apps = [];
-  const tasks = {};
-  const errors = [];
-
-  [official, thirdparty].forEach((result) => {
-    if (result.status === "fulfilled") {
-      apps.push(...(result.value.apps || []));
-      Object.assign(tasks, result.value.tasks || {});
-      errors.push(...(result.value.errors || []));
-    } else {
-      errors.push({
-        source: t("store"),
-        message: result.reason?.message || t("loadFailed"),
-      });
+  try {
+    const result = await api("app-list");
+    state.apps = result.apps || [];
+    state.tasks = result.tasks || {};
+    applyFileStatus(result.files || {});
+    const errors = result.errors || [];
+    if (errors.length) {
+      showToast(
+        errors.map((item) => `${item.source}: ${item.message}`).join("；"),
+        true,
+      );
     }
-  });
-
-  state.apps = apps;
-  state.tasks = tasks;
-  if (errors.length) {
-    showToast(
-      errors.map((item) => `${item.source}: ${item.message}`).join("；"),
-      true,
-    );
+  } catch (error) {
+    state.apps = [];
+    state.tasks = {};
+    showToast(error.message, true);
   }
   renderRows();
 }
@@ -784,6 +889,11 @@ function bindEvents() {
     }
   });
 
+  document.getElementById("openDirBtn").addEventListener("click", () => {
+    const dir = state.settings.downloadDir || "/var/apps/fn-appdownload/shares/fn-appdownload/downloads";
+    openFileManager(dir);
+  });
+
   document
     .querySelectorAll("[data-close]")
     .forEach((node) => node.addEventListener("click", closeModals));
@@ -820,9 +930,11 @@ function bindEvents() {
           thirdPartySources: collectSources(),
         });
         state.settings = result.settings || state.settings;
+        renderSourceList(state.settings.thirdPartySources || []);
         closeModals();
         showToast(t("settingsSaved"));
         await loadApps();
+        syncSourceControls();
       } catch (error) {
         showToast(error.message, true);
       }
