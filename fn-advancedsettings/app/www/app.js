@@ -5,12 +5,15 @@ const API_ENDPOINT = location.pathname.includes("/app/fn-advancedsettings")
 const sections = [
   ["boot", "bootSettings"],
   ["power", "powerSettings"],
+  ["display", "displaySettings"],
   ["ssh", "sshSettings"],
   ["cpu", "cpuSettings"],
   ["dns", "dnsSettings"],
   ["network", "networkSettings"],
   ["proxy", "proxySettings"],
   ["identity", "identitySettings"],
+  ["device", "deviceSettings"],
+  ["port", "portSettings"],
 ];
 
 const icons = {
@@ -18,10 +21,13 @@ const icons = {
   power: '<svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M8 5.5a8 8 0 1 0 8 0"/></svg>',
   ssh: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10l2 2-2 2M12 14h4"/></svg>',
   cpu: '<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M4 9h3M4 15h3M17 9h3M17 15h3M9 4v3M15 4v3M9 17v3M15 17v3"/></svg>',
+  display: '<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
   dns: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="7" cy="7" r="1"/><circle cx="7" cy="12" r="1"/><circle cx="7" cy="17" r="1"/></svg>',
   network: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="4" y="16" width="6" height="5" rx="1"/><rect x="14" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M7 16v-4h10v4"/></svg>',
   proxy: '<svg viewBox="0 0 24 24"><path d="M5 12a7 7 0 0 1 12.7-4"/><path d="M19 12a7 7 0 0 1-12.7 4"/><path d="M17 4v4h-4M7 20v-4h4"/></svg>',
   identity: '<svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-5"/></svg>',
+  device: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6M9 13h4M9 17h2"/></svg>',
+  port: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>',
 };
 
 const powerFields = [
@@ -39,8 +45,32 @@ const sshOptions = {
   GatewayPorts: ["yes", "no", "clientspecified"],
   X11Forwarding: ["yes", "no"],
 };
-const bootFields = ["GRUB_TIMEOUT", "GRUB_CMDLINE_LINUX_DEFAULT", "GRUB_CMDLINE_LINUX", "GRUB_DEFAULT", "GRUB_DISABLE_OS_PROBER"];
+const bootFields = ["GRUB_TIMEOUT", "GRUB_CMDLINE_LINUX_DEFAULT", "GRUB_DEFAULT", "GRUB_DISABLE_OS_PROBER", "GRUB_CMDLINE_LINUX"];
+
+const kernelParams = [
+  ["quiet", "quietDesc"],
+  ["splash", "splashDesc"],
+  ["nomodeset", "nomodesetDesc"],
+  ["pcie_aspm=off", "pcieAspmOffDesc"],
+  ["modprobe.blacklist=module", "blacklistDesc"],
+  ["iommu=pt", "iommuPtDesc"],
+  ["intel_iommu=on", "intelIommuDesc"],
+  ["amd_iommu=on", "amdIommuDesc"],
+  ["hugepages=number", "hugepagesDesc"],
+  ["transparent_hugepage=never", "thpNeverDesc"],
+  ["mitigations=off", "mitigationsOffDesc"],
+  ["nosmp", "nosmpDesc"],
+  ["maxcpus=number", "maxcpusDesc"],
+  ["nohz_full=cpurange", "nohzFullDesc"],
+  ["irqaffinity=cpurange", "irqaffinityDesc"],
+  ["processor.max_cstate=1", "maxCstate1Desc"],
+  ["idle=poll", "idlePollDesc"],
+  ["nmi_watchdog=0", "nmiWatchdog0Desc"],
+  ["audit=0", "audit0Desc"],
+  ["sysrq_always_enabled", "sysrqDesc"],
+];
 const proxyFields = ["http_proxy", "https_proxy", "ftp_proxy", "socks_proxy", "no_proxy"];
+const proxyTargetList = ["apt", "docker", "pip", "npm", "git"];
 
 const I18N = {
   "zh-CN": {
@@ -52,6 +82,8 @@ const I18N = {
     saved: "已保存",
     about: "关于",
     close: "关闭",
+    cancel: "取消",
+    confirm: "确定",
     aboutDeclaration: "本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。",
     communitySupport: "社区支持",
     sponsorSupport: "赞助支持",
@@ -60,10 +92,41 @@ const I18N = {
     powerSettings: "电源设置",
     sshSettings: "SSH 设置",
     cpuSettings: "CPU 设置",
+    cpuExtra: "其他项",
+    cpuName: "名称",
+    cpuDriver: "驱动",
+    currentFreq: "当前频率",
+    epp: "能效偏好 (EPP)",
+    boost: "CPU 加速 (Boost)",
+    no_turbo: "禁用 Turbo Boost",
+    amd_pstate_prefcore: "AMD 首选核心",
+    displaySettings: "屏幕设置",
+    displayConnector: "接口",
+    displayStatus: "状态",
+    displayConnected: "已连接",
+    displayDisconnected: "未连接",
+    displayMonitor: "显示器",
+    displayManufacturer: "制造商",
+    displayResolution: "分辨率",
+    displayCurrentResolution: "当前分辨率",
+    displayNativeResolution: "原生分辨率",
+    displayRefreshRate: "刷新率",
+    displaySize: "尺寸",
+    displayModes: "支持模式",
+    displayDpms: "电源管理",
+    displayEnabled: "已启用",
+    displayDisabled: "已禁用",
+    displayForcedOff: "已关闭",
+    displayPowerOn: "开启",
+    displayPowerOff: "关闭",
+    displayPowerOffConfirm: "确定要关闭此屏幕吗？关闭后可能需要物理操作或重新连接来恢复。",
+    displayPowerOnConfirm: "确定要开启此屏幕吗？",
     dnsSettings: "DNS 设置",
     networkSettings: "网络设置",
     proxySettings: "代理设置",
     identitySettings: "设备标识",
+    deviceSettings: "设备信息",
+    portSettings: "端口信息",
     applyGrub: "更新 grub 配置",
     restartLogind: "重启 logind 服务",
     restartSsh: "重启 SSH 服务",
@@ -97,6 +160,29 @@ const I18N = {
     GRUB_CMDLINE_LINUX: "额外内核参数",
     GRUB_DEFAULT: "默认启动项",
     GRUB_DISABLE_OS_PROBER: "检测其他系统",
+    commonKernelParams: "常用内核参数",
+    paramName: "参数",
+    paramDesc: "说明",
+    quietDesc: "抑制内核启动时的文本输出，仅显示关键错误",
+    splashDesc: "显示启动画面的图形进度条（需配合 plymouth）",
+    nomodesetDesc: "禁止内核在启动早期加载图形驱动，使用 VESA 模式",
+    pcieAspmOffDesc: "禁用 PCIe 链路电源管理（ASPM），可解决某些设备兼容性问题",
+    blacklistDesc: "将指定模块加入黑名单，阻止内核自动加载（如 pcspkr 蜂鸣器）",
+    iommuPtDesc: "启用 IOMMU 直通模式，提升设备直通性能（需配合 VT-d/AMD-Vi）",
+    intelIommuDesc: "启用 Intel IOMMU（VT-d）支持，用于 PCIe 设备直通",
+    amdIommuDesc: "启用 AMD IOMMU（AMD-Vi）支持，用于 PCIe 设备直通",
+    hugepagesDesc: "预分配指定数量的 2MB 大页内存，用于数据库或虚拟化优化",
+    thpNeverDesc: "禁用透明大页，避免内存分配延迟（适用于数据库等场景）",
+    mitigationsOffDesc: "关闭 CPU 安全缓解措施（如 Spectre/Meltdown），提升性能但降低安全性",
+    nosmpDesc: "禁用多核处理器，仅使用单核运行（调试用）",
+    maxcpusDesc: "限制系统最多使用的 CPU 核心数（如 maxcpus=4）",
+    nohzFullDesc: "启用无滴答内核模式，减少时钟中断（如 nohz_full=1-3）",
+    irqaffinityDesc: "将硬件中断绑定到指定 CPU 核心（如 irqaffinity=0）",
+    maxCstate1Desc: "限制 CPU 最低进入 C1 空闲状态，减少唤醒延迟",
+    idlePollDesc: "使用轮询空闲循环代替 CPU 睡眠，最低延迟但功耗最高",
+    nmiWatchdog0Desc: "禁用 NMI 看门狗定时器，减少中断开销",
+    audit0Desc: "禁用审计子系统，减少系统调用开销",
+    sysrqDesc: "始终启用 Magic SysRq 键，用于紧急系统恢复",
     HandlePowerKey: "按下电源键",
     HandlePowerKeyLongPress: "长按电源键",
     HandleRebootKey: "按下重启键",
@@ -119,6 +205,12 @@ const I18N = {
     ftp_proxy: "FTP 代理",
     socks_proxy: "SOCKS 代理",
     no_proxy: "不走代理的地址",
+    proxyTargets: "代理应用",
+    aptTarget: "APT 包管理器",
+    dockerTarget: "Docker 守护进程",
+    pipTarget: "Python pip",
+    npmTarget: "Node.js npm",
+    gitTarget: "Git",
     min_freq: "最小频率",
     max_freq: "最大频率",
     device_id: "设备 ID",
@@ -143,6 +235,64 @@ const I18N = {
     u: "u 单播包",
     b: "b 广播包",
     m: "m 组播包",
+    pciDevices: "PCI 设备",
+    usbDevices: "USB 设备",
+    tcpPorts: "TCP 端口",
+    udpPorts: "UDP 端口",
+    slot: "插槽",
+    class: "类型",
+    description: "描述",
+    bus: "总线",
+    device: "设备",
+    id: "ID",
+    deviceId: "设备 ID",
+    driver: "驱动",
+    proto: "协议",
+    localAddress: "本地地址",
+    port: "端口",
+    processName: "进程名",
+    processPid: "PID",
+    modules: "内核模块",
+    state: "状态",
+    listen: "监听",
+    unconn: "未连接",
+    noData: "暂无数据",
+    bridgeSettings: "桥接设置",
+    bridgeName: "桥接名称",
+    stp: "STP",
+    forwardDelay: "转发延迟",
+    helloTime: "Hello 时间",
+    maxAge: "最大老化",
+    members: "从属接口",
+    actions: "操作",
+    createBridge: "创建桥接",
+    deleteBridge: "删除",
+    addMember: "添加接口",
+    removeMember: "移除",
+    toggleStp: "切换 STP",
+    enabled: "启用",
+    disabled: "禁用",
+    forwarding: "转发",
+    learning: "学习",
+    listening: "监听",
+    blocking: "阻塞",
+    selectInterface: "选择接口",
+    confirmDeleteBridge: "确定要删除桥接",
+    confirmRemoveMember: "确定要从桥接中移除接口",
+    searchPort: "搜索端口/地址/进程",
+    noMatch: "无匹配结果",
+    tcpSettings: "拥塞控制",
+    congestionControl: "拥塞控制算法",
+    fastopen: "TCP Fast Open",
+    syncookies: "SYN Cookies 防洪",
+    twReuse: "TIME_WAIT 端口复用",
+    finTimeout: "FIN_WAIT 超时 (秒)",
+    keepaliveTime: "Keepalive 间隔 (秒)",
+    sack: "选择性确认 (SACK)",
+    timestamps: "TCP 时间戳",
+    windowScaling: "窗口缩放",
+    mtuProbing: "MTU 路径探测",
+    nicSettings: "网卡设置",
   },
   "en-US": {
     appTitle: "Advanced Settings",
@@ -153,6 +303,8 @@ const I18N = {
     saved: "Saved",
     about: "About",
     close: "Close",
+    cancel: "Cancel",
+    confirm: "OK",
     aboutDeclaration: "This community-maintained open source project is free and open source, intended only for learning and communication. Please follow local laws and platform terms.",
     communitySupport: "Community Support",
     sponsorSupport: "Sponsor Support",
@@ -161,10 +313,41 @@ const I18N = {
     powerSettings: "Power Settings",
     sshSettings: "SSH Settings",
     cpuSettings: "CPU Settings",
+    cpuExtra: "Other Options",
+    cpuName: "Name",
+    cpuDriver: "Driver",
+    currentFreq: "Current Freq",
+    epp: "Energy Perf Preference (EPP)",
+    boost: "CPU Boost",
+    no_turbo: "Disable Turbo Boost",
+    amd_pstate_prefcore: "AMD Preferred Core",
+    displaySettings: "Display Settings",
+    displayConnector: "Connector",
+    displayStatus: "Status",
+    displayConnected: "Connected",
+    displayDisconnected: "Disconnected",
+    displayMonitor: "Monitor",
+    displayManufacturer: "Manufacturer",
+    displayResolution: "Resolution",
+    displayCurrentResolution: "Current Resolution",
+    displayNativeResolution: "Native Resolution",
+    displayRefreshRate: "Refresh Rate",
+    displaySize: "Size",
+    displayModes: "Supported Modes",
+    displayDpms: "Power Management",
+    displayEnabled: "Enabled",
+    displayDisabled: "Disabled",
+    displayForcedOff: "Turned Off",
+    displayPowerOn: "Turn On",
+    displayPowerOff: "Turn Off",
+    displayPowerOffConfirm: "Are you sure you want to turn off this display? You may need physical access or reconnection to restore it.",
+    displayPowerOnConfirm: "Are you sure you want to turn on this display?",
     dnsSettings: "DNS Settings",
     networkSettings: "Network Settings",
     proxySettings: "Proxy Settings",
     identitySettings: "Device Identity",
+    deviceSettings: "Device Info",
+    portSettings: "Port Info",
     applyGrub: "Update grub config",
     restartLogind: "Restart logind service",
     restartSsh: "Restart SSH service",
@@ -198,6 +381,29 @@ const I18N = {
     GRUB_CMDLINE_LINUX: "Extra kernel parameters",
     GRUB_DEFAULT: "Default boot entry",
     GRUB_DISABLE_OS_PROBER: "Detect other systems",
+    commonKernelParams: "Common Kernel Parameters",
+    paramName: "Parameter",
+    paramDesc: "Description",
+    quietDesc: "Suppress kernel boot text output, show only critical errors",
+    splashDesc: "Show graphical boot splash progress bar (requires plymouth)",
+    nomodesetDesc: "Prevent kernel from loading graphics drivers early, use VESA mode",
+    pcieAspmOffDesc: "Disable PCIe link power management (ASPM), may fix device compatibility",
+    blacklistDesc: "Blacklist specified module to prevent auto-loading (e.g. pcspkr beeper)",
+    iommuPtDesc: "Enable IOMMU pass-through mode for better device passthrough performance",
+    intelIommuDesc: "Enable Intel IOMMU (VT-d) support for PCIe device passthrough",
+    amdIommuDesc: "Enable AMD IOMMU (AMD-Vi) support for PCIe device passthrough",
+    hugepagesDesc: "Pre-allocate specified number of 2MB huge pages for DB/virtualization",
+    thpNeverDesc: "Disable transparent huge pages to avoid allocation latency (for databases)",
+    mitigationsOffDesc: "Disable CPU security mitigations (Spectre/Meltdown), faster but less secure",
+    nosmpDesc: "Disable multi-core, run on single core only (for debugging)",
+    maxcpusDesc: "Limit max number of CPU cores to use (e.g. maxcpus=4)",
+    nohzFullDesc: "Enable tickless kernel mode to reduce timer interrupts (e.g. nohz_full=1-3)",
+    irqaffinityDesc: "Bind hardware interrupts to specified CPU cores (e.g. irqaffinity=0)",
+    maxCstate1Desc: "Limit CPU to C1 idle state at most, reduce wakeup latency",
+    idlePollDesc: "Use polling idle loop instead of CPU sleep, lowest latency but highest power",
+    nmiWatchdog0Desc: "Disable NMI watchdog timer to reduce interrupt overhead",
+    audit0Desc: "Disable audit subsystem to reduce syscall overhead",
+    sysrqDesc: "Always enable Magic SysRq key for emergency system recovery",
     HandlePowerKey: "Press power key",
     HandlePowerKeyLongPress: "Long-press power key",
     HandleRebootKey: "Press reboot key",
@@ -220,6 +426,12 @@ const I18N = {
     ftp_proxy: "FTP proxy",
     socks_proxy: "SOCKS proxy",
     no_proxy: "Proxy bypass list",
+    proxyTargets: "Apply Proxy To",
+    aptTarget: "APT Package Manager",
+    dockerTarget: "Docker Daemon",
+    pipTarget: "Python pip",
+    npmTarget: "Node.js npm",
+    gitTarget: "Git",
     min_freq: "Min frequency",
     max_freq: "Max frequency",
     device_id: "Device ID",
@@ -244,6 +456,64 @@ const I18N = {
     u: "u Unicast",
     b: "b Broadcast",
     m: "m Multicast",
+    pciDevices: "PCI Devices",
+    usbDevices: "USB Devices",
+    tcpPorts: "TCP Ports",
+    udpPorts: "UDP Ports",
+    slot: "Slot",
+    class: "Class",
+    description: "Description",
+    bus: "Bus",
+    device: "Device",
+    id: "ID",
+    deviceId: "Device ID",
+    driver: "Driver",
+    proto: "Protocol",
+    localAddress: "Local Address",
+    port: "Port",
+    processName: "Process",
+    processPid: "PID",
+    modules: "Kernel modules",
+    state: "State",
+    listen: "Listen",
+    unconn: "Unconnected",
+    noData: "No data",
+    bridgeSettings: "Bridge Settings",
+    bridgeName: "Bridge Name",
+    stp: "STP",
+    forwardDelay: "Forward Delay",
+    helloTime: "Hello Time",
+    maxAge: "Max Age",
+    members: "Members",
+    actions: "Actions",
+    createBridge: "Create Bridge",
+    deleteBridge: "Delete",
+    addMember: "Add Interface",
+    removeMember: "Remove",
+    toggleStp: "Toggle STP",
+    enabled: "Enabled",
+    disabled: "Disabled",
+    forwarding: "Forwarding",
+    learning: "Learning",
+    listening: "Listening",
+    blocking: "Blocking",
+    selectInterface: "Select Interface",
+    confirmDeleteBridge: "Are you sure you want to delete bridge",
+    confirmRemoveMember: "Are you sure you want to remove interface from bridge",
+    searchPort: "Search port/address/process",
+    noMatch: "No match",
+    tcpSettings: "Congestion Control",
+    congestionControl: "Congestion Control Algorithm",
+    fastopen: "TCP Fast Open",
+    syncookies: "SYN Cookies (Flood Protection)",
+    twReuse: "TIME_WAIT Port Reuse",
+    finTimeout: "FIN_WAIT Timeout (sec)",
+    keepaliveTime: "Keepalive Interval (sec)",
+    sack: "Selective Ack (SACK)",
+    timestamps: "TCP Timestamps",
+    windowScaling: "Window Scaling",
+    mtuProbing: "MTU Path Probing",
+    nicSettings: "NIC Settings",
   },
 };
 
@@ -378,6 +648,27 @@ function showToast(message, isError = false) {
   toast._timer = setTimeout(() => toast.classList.add("hidden"), 2600);
 }
 
+function showConfirm(message) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("confirmModal");
+    const msgEl = document.getElementById("confirmMessage");
+    const okBtn = document.getElementById("confirmOk");
+    const cancelBtn = document.getElementById("confirmCancel");
+    msgEl.textContent = message;
+    modal.classList.remove("hidden");
+    const cleanup = (result) => {
+      modal.classList.add("hidden");
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+      resolve(result);
+    };
+    const onOk = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+  });
+}
+
 function setSaving(saving) {
   state.saving = saving;
   const btn = document.getElementById("saveBtn");
@@ -402,10 +693,13 @@ function wolStatusText(value) {
   return text.split("").map((item) => t(item)).join(", ");
 }
 
-function inputField(name, value = "", options = null, extra = "") {
+function inputField(name, value = "", options = null, extra = "", multiline = false) {
   const label = fieldLabel(name);
   if (options) {
     return `<label class="field"><span title="${escapeHtml(name)}">${escapeHtml(label)}</span><select data-name="${escapeHtml(name)}" ${extra}>${options.map((item) => `<option value="${escapeHtml(item)}" ${String(value) === String(item) ? "selected" : ""}>${escapeHtml(optionLabel(name, item))}</option>`).join("")}</select></label>`;
+  }
+  if (multiline) {
+    return `<label class="field wide"><span title="${escapeHtml(name)}">${escapeHtml(label)}</span><textarea data-name="${escapeHtml(name)}" spellcheck="false" ${extra}>${escapeHtml(value)}</textarea></label>`;
   }
   return `<label class="field"><span title="${escapeHtml(name)}">${escapeHtml(label)}</span><input data-name="${escapeHtml(name)}" value="${escapeHtml(value)}" spellcheck="false" ${extra}></label>`;
 }
@@ -469,7 +763,11 @@ function renderNav() {
 
 function renderBoot() {
   const parsed = state.data.boot?.parsed || {};
-  document.getElementById("bootFields").innerHTML = bootFields.map((key) => inputField(key, parsed[key] || "")).join("");
+  document.getElementById("bootFields").innerHTML = bootFields.map((key) => inputField(key, parsed[key] || "", null, "", key === "GRUB_CMDLINE_LINUX")).join("");
+  const tbody = document.getElementById("kernelParamBody");
+  if (tbody) {
+    tbody.innerHTML = kernelParams.map(([param, descKey]) => `<tr><td class="mono">${escapeHtml(param)}</td><td>${escapeHtml(t(descKey))}</td></tr>`).join("");
+  }
 }
 
 function renderPower() {
@@ -490,17 +788,100 @@ function renderSsh() {
 function renderCpu() {
   const policies = state.data.cpu?.policies || [];
   const cpus = state.data.cpu?.cpus || [];
+  const extra = state.data.cpu?.extra || {};
   const governors = [...new Set(policies.flatMap((item) => item.available_governors || []).concat(cpus.flatMap((item) => item.available_governors || [])))];
+  const eppOptions = [...new Set(policies.flatMap((item) => item.available_epp || []).concat(cpus.flatMap((item) => item.available_epp || [])))];
   const current = policies[0] || cpus[0] || {};
   document.getElementById("cpuFields").innerHTML =
     inputField("min_freq", current.min_freq || "") +
     inputField("max_freq", current.max_freq || "") + 
-    inputField("governor", current.governor || "", governors.length ? governors : null);
-  document.getElementById("cpuList").innerHTML = (policies.length ? policies : cpus).map((item) => `
-    <div class="data-item">
-      <div class="data-title cpu-title"><span>${escapeHtml(item.name)}</span><div class="data-meta">${t("current")}: ${escapeHtml(item.cur_freq || "-")} / ${escapeHtml(item.min_freq || "-")} - ${escapeHtml(item.max_freq || "-")}</div><span>${escapeHtml(item.governor || "")}</span></div>
-    </div>
-  `).join("");
+    inputField("governor", current.governor || "", governors.length ? governors : null) +
+    (eppOptions.length ? inputField("epp", current.epp || "", eppOptions) : "");
+  const extraHtml = [];
+  if (extra.boost !== undefined) {
+    extraHtml.push(inputField("boost", String(extra.boost), ["1", "0"]));
+  }
+  if (extra.no_turbo !== undefined) {
+    extraHtml.push(inputField("no_turbo", String(extra.no_turbo), ["1", "0"]));
+  }
+  if (extra.amd_pstate_prefcore !== undefined) {
+    extraHtml.push(inputField("amd_pstate_prefcore", String(extra.amd_pstate_prefcore), ["enabled", "disabled"]));
+  }
+  const extraSection = document.getElementById("cpuExtraSection");
+  const extraFields = document.getElementById("cpuExtraFields");
+  if (extraHtml.length) {
+    extraFields.innerHTML = extraHtml.join("");
+    extraSection.style.display = "";
+  } else {
+    extraSection.style.display = "none";
+  }
+  const items = policies.length ? policies : cpus;
+  const tbody = document.querySelector("#cpuTable tbody");
+  if (!tbody) return;
+  const fmtFreq = (v) => {
+    if (!v || v === "-") return "-";
+    const n = Number(v);
+    if (isNaN(n)) return escapeHtml(v);
+    return (n / 1000000).toFixed(2) + " GHz";
+  };
+  tbody.innerHTML = items.length ? items.map((item) => {
+    const driver = item.scaling_driver || "-";
+    const gov = item.governor || "-";
+    const epp = item.epp || "-";
+    const boost = item.boost !== undefined ? (item.boost === "1" ? `<span class="badge-driver">${t("enabled")}</span>` : `<span class="subtle">${t("disabled")}</span>`) : "-";
+    return `<tr>
+      <td class="mono">${escapeHtml(item.name)}</td>
+      <td class="mono">${escapeHtml(driver)}</td>
+      <td class="mono">${fmtFreq(item.cur_freq)}</td>
+      <td class="mono">${fmtFreq(item.min_freq)}</td>
+      <td class="mono">${fmtFreq(item.max_freq)}</td>
+      <td>${escapeHtml(gov)}</td>
+      <td>${escapeHtml(epp)}</td>
+      <td>${boost}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="8" class="empty-cell">${escapeHtml(t("noData"))}</td></tr>`;
+}
+
+function renderDisplay() {
+  const displays = state.data.display?.displays || [];
+  const tbody = document.querySelector("#displayTable tbody");
+  if (!tbody) return;
+  tbody.innerHTML = displays.length ? displays.map((item) => {
+    const isConnected = item.status === "connected";
+    const isForcedOff = item.forced_off === true;
+    const statusBadge = isForcedOff
+      ? `<span class="subtle">${escapeHtml(t("displayForcedOff"))}</span>`
+      : isConnected
+      ? `<span class="badge-driver">${escapeHtml(t("displayConnected"))}</span>`
+      : `<span class="subtle">${escapeHtml(t("displayDisconnected"))}</span>`;
+    const monitorName = item.monitor_name || item.manufacturer || "-";
+    const manufacturer = item.manufacturer || "-";
+    const currentRes = item.current_resolution || "-";
+    const nativeRes = item.native_resolution || "-";
+    const refreshRate = item.current_rate ? `${item.current_rate} Hz` : (item.vfreq_range || "-");
+    const size = item.size_inch ? `${item.size_inch}" (${item.size_cm} cm)` : (item.size_cm ? `${item.size_cm} cm` : "-");
+    const dpms = item.dpms || (item.drm_enabled === "enabled" ? "On" : item.drm_enabled === "disabled" ? "Off" : "-");
+    const dpmsBadge = isForcedOff
+      ? `<span class="subtle">${escapeHtml(t("displayDisabled"))}</span>`
+      : dpms === "On" ? `<span class="badge-driver">${escapeHtml(t("displayEnabled"))}</span>` : dpms === "Off" ? `<span class="subtle">${escapeHtml(t("displayDisabled"))}</span>` : escapeHtml(dpms);
+    const powerBtn = isForcedOff
+      ? `<button type="button" class="ghost-btn display-power-btn" data-display-name="${escapeHtml(item.name)}" data-display-action="on">${escapeHtml(t("displayPowerOn"))}</button>`
+      : isConnected
+      ? `<button type="button" class="ghost-btn display-power-btn" data-display-name="${escapeHtml(item.name)}" data-display-action="off">${escapeHtml(t("displayPowerOff"))}</button>`
+      : `<button type="button" class="ghost-btn display-power-btn" data-display-name="${escapeHtml(item.name)}" data-display-action="on">${escapeHtml(t("displayPowerOn"))}</button>`;
+    return `<tr>
+      <td class="mono">${escapeHtml(item.connector)}</td>
+      <td>${statusBadge}</td>
+      <td>${escapeHtml(monitorName)}</td>
+      <td class="mono">${escapeHtml(manufacturer)}</td>
+      <td class="mono">${escapeHtml(currentRes)}</td>
+      <td class="mono">${escapeHtml(nativeRes)}</td>
+      <td class="mono">${escapeHtml(refreshRate)}</td>
+      <td class="mono">${escapeHtml(size)}</td>
+      <td>${dpmsBadge}</td>
+      <td>${powerBtn}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="10" class="empty-cell">${escapeHtml(t("noData"))}</td></tr>`;
 }
 
 function renderDns() {
@@ -532,11 +913,69 @@ function renderNetwork() {
     `;
   }).join("");
   syncNetworkAutonegFields();
+  renderTcp();
+  renderBridges();
+}
+
+function renderTcp() {
+  const tcp = state.data.network?.tcp || {};
+  const saved = state.data.network?.saved || {};
+  const savedTcp = saved.tcp || {};
+  const availableCc = tcp.available_congestion_control || [];
+  const ccOptions = availableCc.length ? availableCc : [tcp.congestion_control || "cubic"];
+  const mtuProbingOptions = ["0", "1", "2"];
+  const container = document.getElementById("tcpFields");
+  if (!container) return;
+  container.innerHTML = [
+    inputField("congestion_control", savedTcp.congestion_control || tcp.congestion_control || "cubic", ccOptions),
+    inputField("fastopen", savedTcp.fastopen || tcp.fastopen || "1"),
+    inputField("syncookies", savedTcp.syncookies || tcp.syncookies || "1", ["0", "1"]),
+    inputField("tw_reuse", savedTcp.tw_reuse || tcp.tw_reuse || "2", ["0", "1", "2"]),
+    inputField("fin_timeout", savedTcp.fin_timeout || tcp.fin_timeout || "60"),
+    inputField("keepalive_time", savedTcp.keepalive_time || tcp.keepalive_time || "7200"),
+    inputField("sack", savedTcp.sack || tcp.sack || "1", ["0", "1"]),
+    inputField("timestamps", savedTcp.timestamps || tcp.timestamps || "1", ["0", "1"]),
+    inputField("window_scaling", savedTcp.window_scaling || tcp.window_scaling || "1", ["0", "1"]),
+    inputField("mtu_probing", savedTcp.mtu_probing || tcp.mtu_probing || "0", mtuProbingOptions),
+  ].join("");
+}
+
+function bridgeMemberStateLabel(state) {
+  const map = { forwarding: "forwarding", learning: "learning", listening: "listening", blocking: "blocking", disabled: "disabled" };
+  return t(map[state] || state || "disabled");
+}
+
+function renderBridges() {
+  const bridges = state.data.network?.bridges || [];
+  const availableIfaces = state.data.network?.available_ifaces || [];
+  const bridgeNames = new Set(bridges.map((b) => b.name));
+  const memberNames = new Set(bridges.flatMap((b) => b.members.map((m) => m.name)));
+  const freeIfaces = availableIfaces.filter((n) => !bridgeNames.has(n) && !memberNames.has(n) && n !== "lo");
+  const tbody = document.getElementById("bridgeBody");
+  if (!tbody) return;
+  tbody.innerHTML = bridges.length ? bridges.map((bridge) => {
+    const memberHtml = bridge.members.length ? bridge.members.map((m) => `<span class="badge-member">${escapeHtml(m.name)}<span class="member-state">${escapeHtml(bridgeMemberStateLabel(m.state))}</span><button type="button" class="member-remove-btn" data-bridge="${escapeHtml(bridge.name)}" data-member="${escapeHtml(m.name)}" title="${escapeHtml(t("removeMember"))}">×</button></span>`).join(" ") : `<span class="subtle">${escapeHtml(t("noData"))}</span>`;
+    const ifaceOptions = freeIfaces.length ? freeIfaces.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("") : "";
+    const addMemberHtml = freeIfaces.length ? `<select class="bridge-add-select" data-bridge="${escapeHtml(bridge.name)}"><option value="">${escapeHtml(t("selectInterface"))}</option>${ifaceOptions}</select>` : "";
+    return `<tr>
+      <td class="mono">${escapeHtml(bridge.name)}</td>
+      <td><label class="check stp-toggle"><input type="checkbox" data-bridge-stp="${escapeHtml(bridge.name)}" ${bridge.stp ? "checked" : ""}><span>${bridge.stp ? t("enabled") : t("disabled")}</span></label></td>
+      <td class="mono">${escapeHtml(bridge.forward_delay || "-")}</td>
+      <td class="mono">${escapeHtml(bridge.hello_time || "-")}</td>
+      <td class="mono">${escapeHtml(bridge.max_age || "-")}</td>
+      <td>${memberHtml} ${addMemberHtml}</td>
+      <td><button type="button" class="ghost-btn bridge-delete-btn" data-bridge="${escapeHtml(bridge.name)}">${escapeHtml(t("deleteBridge"))}</button></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="7" class="empty-cell">${escapeHtml(t("noData"))}</td></tr>`;
 }
 
 function renderProxy() {
   const values = state.data.proxy?.values || {};
+  const targets = state.data.proxy?.targets || {};
   document.getElementById("proxyFields").innerHTML = proxyFields.map((key) => inputField(key, values[key] || "")).join("");
+  document.getElementById("proxyTargets").innerHTML = proxyTargetList.map((key) => `
+    <label class="check"><input type="checkbox" data-proxy-target value="${escapeHtml(key)}" ${targets[key] ? "checked" : ""}><span>${escapeHtml(t(key + "Target"))}</span></label>
+  `).join("");
 }
 
 function renderIdentity() {
@@ -550,11 +989,61 @@ function renderIdentity() {
   `;
 }
 
+function renderDevice() {
+  const device = state.data.device || {};
+  const pci = device.pci || [];
+  const usb = device.usb || [];
+  const pciTbody = document.querySelector("#pciTable tbody");
+  const usbTbody = document.querySelector("#usbTable tbody");
+  if (!pciTbody || !usbTbody) return;
+  pciTbody.innerHTML = pci.length ? pci.map((item) => `<tr>
+      <td class="mono">${escapeHtml(item.slot || "-")}</td>
+      <td>${item.class_id ? `<span class="mono class-id">[${escapeHtml(item.class_id)}]</span> ` : ""}${escapeHtml(item.class || "-")}</td>
+      <td>${escapeHtml(item.description || "-")}</td>
+      <td class="mono">${escapeHtml(item.device_id || "-")}</td>
+      <td>${item.driver ? `<span class="badge-driver">${escapeHtml(item.driver)}</span>` : "-"}</td>
+      <td class="mono">${escapeHtml(item.modules || "-")}</td>
+    </tr>`).join("") : `<tr><td colspan="6" class="empty-cell">${escapeHtml(t("noData"))}</td></tr>`;
+  usbTbody.innerHTML = usb.length ? usb.map((item) => `<tr>
+      <td class="mono">${escapeHtml(item.bus || "-")}</td>
+      <td class="mono">${escapeHtml(item.device || "-")}</td>
+      <td>${escapeHtml(item.description || "-")}</td>
+      <td class="mono">${escapeHtml(item.id || "-")}</td>
+      <td>${item.driver ? `<span class="badge-driver">${escapeHtml(item.driver)}</span>` : "-"}</td>
+    </tr>`).join("") : `<tr><td colspan="5" class="empty-cell">${escapeHtml(t("noData"))}</td></tr>`;
+}
+
+function filterPortEntry(item, keyword) {
+  if (!keyword) return true;
+  const kw = keyword.toLowerCase();
+  return [item.local_address, item.port, item.process_name, item.process_pid].some((v) => String(v || "").toLowerCase().includes(kw));
+}
+
+function renderPortTable(entries, tbody, keyword) {
+  if (!tbody) return;
+  const filtered = keyword ? entries.filter((item) => filterPortEntry(item, keyword)) : entries;
+  tbody.innerHTML = filtered.length ? filtered.map((item) => `<tr>
+      <td class="mono">${escapeHtml(item.local_address || "-")}</td>
+      <td class="mono">${escapeHtml(item.port || "-")}</td>
+      <td>${escapeHtml(item.process_name || "-")}</td>
+      <td class="mono">${escapeHtml(item.process_pid || "-")}</td>
+    </tr>`).join("") : `<tr><td colspan="4" class="empty-cell">${escapeHtml(keyword ? t("noMatch") : t("noData"))}</td></tr>`;
+}
+
+function renderPort() {
+  const port = state.data.port || {};
+  const keyword = (document.getElementById("portSearchInput")?.value || "").trim();
+  const tcp = (port.tcp || []).slice().sort((a, b) => (parseInt(a.port) || 0) - (parseInt(b.port) || 0));
+  const udp = (port.udp || []).slice().sort((a, b) => (parseInt(a.port) || 0) - (parseInt(b.port) || 0));
+  renderPortTable(tcp, document.querySelector("#tcpTable tbody"), keyword);
+  renderPortTable(udp, document.querySelector("#udpTable tbody"), keyword);
+}
+
 function renderPanels() {
   document.querySelectorAll("[data-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.panel !== state.active);
   });
-  document.getElementById("saveBtn").classList.toggle("hidden", state.active === "identity");
+  document.getElementById("saveBtn").classList.toggle("hidden", state.active === "identity" || state.active === "device" || state.active === "port" || state.active === "display");
 }
 
 function render() {
@@ -564,10 +1053,13 @@ function render() {
   renderPower();
   renderSsh();
   renderCpu();
+  renderDisplay();
   renderDns();
   renderNetwork();
   renderProxy();
   renderIdentity();
+  renderDevice();
+  renderPort();
 }
 
 async function loadData() {
@@ -597,7 +1089,7 @@ async function saveActive() {
       }
       data = await api("saveSsh", { changes: collect(document.getElementById("sshFields")), password, apply: document.getElementById("sshApply").checked });
     } else if (state.active === "cpu") {
-      data = await api("saveCpu", { settings: collect(document.getElementById("cpuFields")) });
+      data = await api("saveCpu", { settings: { ...collect(document.getElementById("cpuFields")), ...collect(document.getElementById("cpuExtraFields")) } });
     } else if (state.active === "dns") {
       data = await api("saveDns", { resolv: document.getElementById("resolvContent").value, hosts: document.getElementById("hostsContent").value });
     } else if (state.active === "network") {
@@ -615,9 +1107,11 @@ async function saveActive() {
         }
         return { name: item.dataset.iface, ...values };
       });
-      data = await api("saveNetwork", { interfaces });
+      data = await api("saveNetwork", { interfaces, tcp: collect(document.getElementById("tcpFields")) });
     } else if (state.active === "proxy") {
-      data = await api("saveProxy", { proxy: collect(document.getElementById("proxyFields")) });
+      const proxyTargets = {};
+      document.querySelectorAll("[data-proxy-target]").forEach((el) => { proxyTargets[el.value] = el.checked; });
+      data = await api("saveProxy", { proxy: collect(document.getElementById("proxyFields")), targets: proxyTargets });
     } else if (state.active === "identity") {
       const values = collect(document.getElementById("identityFields"));
       data = await api("saveIdentity", { enabled: values.enabled === "on", device_id: values.device_id, apply: document.getElementById("identityApply").checked });
@@ -686,6 +1180,95 @@ document.getElementById("networkList").addEventListener("input", (event) => {
   if (autoneg) autoneg.value = "off";
   syncNetworkAutonegFields(item.parentElement);
 });
+
+document.getElementById("portSearchInput").addEventListener("input", () => {
+  renderPort();
+});
+
+async function bridgeAction(action, data = {}) {
+  if (state.saving) return;
+  setSaving(true);
+  try {
+    const result = await api("saveBridge", { bridge_action: action, ...data });
+    state.data.network = { ...state.data.network, bridges: result.bridges, available_ifaces: result.available_ifaces };
+    renderBridges();
+    showToast(t("saved"));
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    setSaving(false);
+  }
+}
+
+document.getElementById("createBridgeBtn").addEventListener("click", () => {
+  const name = document.getElementById("bridgeNameInput").value.trim();
+  const stp = document.getElementById("bridgeStpCheck").checked;
+  if (!name) return;
+  bridgeAction("create", { name, stp }).then(() => {
+    document.getElementById("bridgeNameInput").value = "";
+    document.getElementById("bridgeStpCheck").checked = false;
+  });
+});
+
+document.getElementById("bridgeBody").addEventListener("click", async (event) => {
+  const deleteBtn = event.target.closest(".bridge-delete-btn");
+  if (deleteBtn) {
+    const name = deleteBtn.dataset.bridge;
+    if (await showConfirm(`${t("confirmDeleteBridge")} ${name}?`)) {
+      bridgeAction("delete", { name });
+    }
+    return;
+  }
+  const removeBtn = event.target.closest(".member-remove-btn");
+  if (removeBtn) {
+    const name = removeBtn.dataset.bridge;
+    const member = removeBtn.dataset.member;
+    if (await showConfirm(`${t("confirmRemoveMember")} ${member}?`)) {
+      bridgeAction("remove_member", { name, member });
+    }
+    return;
+  }
+});
+
+document.getElementById("bridgeBody").addEventListener("change", (event) => {
+  const stpCheckbox = event.target.closest("[data-bridge-stp]");
+  if (stpCheckbox) {
+    const name = stpCheckbox.dataset.bridgeStp;
+    bridgeAction("update_stp", { name, stp: stpCheckbox.checked });
+    return;
+  }
+  const addSelect = event.target.closest(".bridge-add-select");
+  if (addSelect && addSelect.value) {
+    const name = addSelect.dataset.bridge;
+    const member = addSelect.value;
+    bridgeAction("add_member", { name, member });
+    return;
+  }
+});
+
+async function displayAction(action, name) {
+  if (state.saving) return;
+  const confirmMsg = action === "off" ? t("displayPowerOffConfirm") : t("displayPowerOnConfirm");
+  if (!await showConfirm(confirmMsg)) return;
+  setSaving(true);
+  try {
+    const result = await api("saveDisplay", { display_action: action, name });
+    state.data.display = result.display;
+    renderDisplay();
+    showToast(t("saved"));
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    setSaving(false);
+  }
+}
+
+document.getElementById("displayTable").addEventListener("click", (event) => {
+  const btn = event.target.closest(".display-power-btn");
+  if (!btn) return;
+  displayAction(btn.dataset.displayAction, btn.dataset.displayName);
+});
+
 document.getElementById("aboutBtn").addEventListener("click", () => document.getElementById("aboutModal").classList.remove("hidden"));
 document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => document.getElementById("aboutModal").classList.add("hidden")));
 document.getElementById("aboutModal").addEventListener("click", (event) => {

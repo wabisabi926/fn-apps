@@ -36,6 +36,20 @@
                 配置</span></label>
           </div>
           <div class="grid" id="bootFields"></div>
+          <div class="info-subsection">
+            <h4 data-i18n="commonKernelParams">常用内核参数</h4>
+            <div class="table-wrap">
+              <table class="info-table" id="kernelParamTable">
+                <thead>
+                  <tr>
+                    <th data-i18n="paramName">参数</th>
+                    <th data-i18n="paramDesc">说明</th>
+                  </tr>
+                </thead>
+                <tbody id="kernelParamBody"></tbody>
+              </table>
+            </div>
+          </div>
         </section>
 
         <section id="powerPanel" class="panel hidden" data-panel="power">
@@ -45,6 +59,29 @@
                 logind 服务</span></label>
           </div>
           <div class="grid" id="powerFields"></div>
+        </section>
+
+        <section id="displayPanel" class="panel hidden" data-panel="display">
+          <h3 data-i18n="displaySettings">屏幕设置</h3>
+          <div class="table-wrap">
+            <table class="info-table" id="displayTable">
+              <thead>
+                <tr>
+                  <th data-i18n="displayConnector">接口</th>
+                  <th data-i18n="displayStatus">状态</th>
+                  <th data-i18n="displayMonitor">显示器</th>
+                  <th data-i18n="displayManufacturer">制造商</th>
+                  <th data-i18n="displayCurrentResolution">当前分辨率</th>
+                  <th data-i18n="displayNativeResolution">原生分辨率</th>
+                  <th data-i18n="displayRefreshRate">刷新率</th>
+                  <th data-i18n="displaySize">尺寸</th>
+                  <th data-i18n="displayDpms">电源管理</th>
+                  <th data-i18n="actions">操作</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </section>
 
         <section id="sshPanel" class="panel hidden" data-panel="ssh">
@@ -68,7 +105,27 @@
         <section id="cpuPanel" class="panel hidden" data-panel="cpu">
           <h3 data-i18n="cpuSettings">CPU 设置</h3>
           <div class="grid" id="cpuFields"></div>
-          <div id="cpuList" class="data-list"></div>
+          <div class="info-subsection" id="cpuExtraSection" style="display:none">
+            <h4 data-i18n="cpuExtra">其他项</h4>
+            <div class="grid" id="cpuExtraFields"></div>
+          </div>
+          <div class="table-wrap">
+            <table class="info-table" id="cpuTable">
+              <thead>
+                <tr>
+                  <th data-i18n="cpuName">名称</th>
+                  <th data-i18n="cpuDriver">驱动</th>
+                  <th data-i18n="currentFreq">当前频率</th>
+                  <th data-i18n="min_freq">最小频率</th>
+                  <th data-i18n="max_freq">最大频率</th>
+                  <th data-i18n="governor">策略</th>
+                  <th data-i18n="epp">EPP</th>
+                  <th data-i18n="boost">Boost</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </section>
 
         <section id="dnsPanel" class="panel hidden" data-panel="dns">
@@ -83,12 +140,47 @@
 
         <section id="networkPanel" class="panel hidden" data-panel="network">
           <h3 data-i18n="networkSettings">网络设置</h3>
-          <div id="networkList" class="data-list"></div>
+          <div class="info-subsection">
+            <h4 data-i18n="tcpSettings">拥塞控制</h4>
+            <div class="grid" id="tcpFields"></div>
+          </div>
+          <div class="info-subsection">
+            <h4 data-i18n="bridgeSettings">桥接设置</h4>
+            <div class="bridge-toolbar">
+              <label class="field bridge-name-field"><span data-i18n="bridgeName">桥接名称</span><input id="bridgeNameInput" type="text" placeholder="br0" spellcheck="false"></label>
+              <label class="check bridge-stp-check"><input id="bridgeStpCheck" type="checkbox"><span data-i18n="stp">STP</span></label>
+              <button id="createBridgeBtn" class="ghost-btn" type="button" data-i18n="createBridge">创建桥接</button>
+            </div>
+            <div class="table-wrap">
+              <table class="info-table" id="bridgeTable">
+                <thead>
+                  <tr>
+                    <th data-i18n="bridgeName">桥接名称</th>
+                    <th data-i18n="stp">STP</th>
+                    <th data-i18n="forwardDelay">转发延迟</th>
+                    <th data-i18n="helloTime">Hello 时间</th>
+                    <th data-i18n="maxAge">最大老化</th>
+                    <th data-i18n="members">从属接口</th>
+                    <th data-i18n="actions">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="bridgeBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="info-subsection">
+            <h4 data-i18n="nicSettings">网卡设置</h4>
+            <div id="networkList" class="data-list"></div>
+          </div>
         </section>
 
         <section id="proxyPanel" class="panel hidden" data-panel="proxy">
           <h3 data-i18n="proxySettings">代理设置</h3>
           <div class="grid" id="proxyFields"></div>
+          <div class="info-subsection">
+            <h4 data-i18n="proxyTargets">代理应用</h4>
+            <div class="proxy-targets" id="proxyTargets"></div>
+          </div>
         </section>
 
         <section id="identityPanel" class="panel hidden" data-panel="identity">
@@ -98,6 +190,86 @@
                 data-i18n="restartIdentity">重启系统信息服务</span></label>
           </div>
           <div class="grid" id="identityFields"></div>
+        </section>
+
+        <section id="devicePanel" class="panel hidden" data-panel="device">
+          <h3 data-i18n="deviceSettings">设备信息</h3>
+          <div class="info-subsection">
+            <h4 data-i18n="pciDevices">PCI 设备</h4>
+            <div class="table-wrap">
+              <table class="info-table" id="pciTable">
+                <thead>
+                  <tr>
+                    <th data-i18n="slot">插槽</th>
+                    <th data-i18n="class">类型</th>
+                    <th data-i18n="description">描述</th>
+                    <th data-i18n="deviceId">设备 ID</th>
+                    <th data-i18n="driver">驱动</th>
+                    <th data-i18n="modules">内核模块</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="info-subsection">
+            <h4 data-i18n="usbDevices">USB 设备</h4>
+            <div class="table-wrap">
+              <table class="info-table" id="usbTable">
+                <thead>
+                  <tr>
+                    <th data-i18n="bus">总线</th>
+                    <th data-i18n="device">设备</th>
+                    <th data-i18n="description">描述</th>
+                    <th data-i18n="deviceId">设备 ID</th>
+                    <th data-i18n="driver">驱动</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="portPanel" class="panel hidden" data-panel="port">
+          <div class="section-head">
+            <h3 data-i18n="portSettings">端口信息</h3>
+            <div class="port-search">
+              <input id="portSearchInput" type="text" data-i18n-placeholder="searchPort" placeholder="搜索端口/地址/进程" spellcheck="false">
+            </div>
+          </div>
+          <div class="info-subsection">
+            <h4 data-i18n="tcpPorts">TCP 端口</h4>
+            <div class="table-wrap">
+              <table class="info-table" id="tcpTable">
+                <thead>
+                  <tr>
+                    <th data-i18n="localAddress">本地地址</th>
+                    <th data-i18n="port">端口</th>
+                    <th data-i18n="processName">进程名</th>
+                    <th data-i18n="processPid">PID</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="info-subsection">
+            <h4 data-i18n="udpPorts">UDP 端口</h4>
+            <div class="table-wrap">
+              <table class="info-table" id="udpTable">
+                <thead>
+                  <tr>
+                    <th data-i18n="localAddress">本地地址</th>
+                    <th data-i18n="port">端口</th>
+                    <th data-i18n="processName">进程名</th>
+                    <th data-i18n="processPid">PID</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
         </section>
       </form>
     </main>
@@ -134,6 +306,16 @@
           <a href="https://github.com/wjz304" target="_blank" rel="noopener noreferrer">wjz304</a>
           <span>© 2026 RROrg, Ing, Inc.</span>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="confirm-content">
+      <p id="confirmMessage"></p>
+      <div class="confirm-actions">
+        <button id="confirmCancel" class="ghost-btn" type="button" data-i18n="cancel">取消</button>
+        <button id="confirmOk" class="primary-btn" type="button" data-i18n="confirm">确定</button>
       </div>
     </div>
   </div>

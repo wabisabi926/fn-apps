@@ -18,14 +18,24 @@ from urllib.parse import unquote, urlsplit
 
 APP_NAME = "fn-advancedsettings"
 BASE_STATE_DIR = Path("/var/lib/fn-advancedsettings")
+DISPLAY_STATE_DIR = BASE_STATE_DIR / "display"
 STATE_FILE = BASE_STATE_DIR / "settings.json"
 NETWORK_APPLY = Path("/usr/local/sbin/fn-advancedsettings-network-apply")
 NETWORK_SERVICE = Path("/etc/systemd/system/fn-advancedsettings-network.service")
 CPU_APPLY = Path("/usr/local/sbin/fn-advancedsettings-cpu-apply")
 CPU_SERVICE = Path("/etc/systemd/system/fn-advancedsettings-cpu.service")
+DISPLAY_APPLY = Path("/usr/local/sbin/fn-advancedsettings-display-apply")
+DISPLAY_SERVICE = Path("/etc/systemd/system/fn-advancedsettings-display.service")
+TCP_SYSCTL_CONF = Path("/etc/sysctl.d/99-fn-advancedsettings-tcp.conf")
 PROXY_PROFILE = Path("/etc/profile.d/fn-advancedsettings-proxy.sh")
 PROXY_APT = Path("/etc/apt/apt.conf.d/99fn-advancedsettings-proxy")
+PROXY_DOCKER_DIR = Path("/etc/systemd/system/docker.service.d")
+PROXY_DOCKER_CONF = PROXY_DOCKER_DIR / "proxy.conf"
+PROXY_PIP = Path("/etc/pip.conf")
+PROXY_NPM = Path("/etc/npmrc")
+PROXY_GIT = Path("/etc/gitconfig")
 PROXY_KEYS = ["http_proxy", "https_proxy", "ftp_proxy", "socks_proxy", "no_proxy"]
+PROXY_TARGETS = ["apt", "docker", "pip", "npm", "git"]
 
 PATHS = {
     "grub": Path("/etc/default/grub"),
@@ -398,31 +408,733 @@ def read_ssh():
     return {"content": text, "parsed": parse_sshd(text), "service": read_service_active("sshd")}
 
 
+def _display_forced_off_path(name):
+    return DISPLAY_STATE_DIR / f"{name}.off"
+
+
+def _display_set_forced_off(name, off):
+    DISPLAY_STATE_DIR.mkdir(parents=True, exist_ok=True)
+    marker = _display_forced_off_path(name)
+    if off:
+        marker.write_text("1", encoding="utf-8")
+    else:
+        try:
+            marker.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _display_is_forced_off(name):
+    return _display_forced_off_path(name).exists()
+
+
+def read_display():
+    displays = []
+    drm_dir = Path("/sys/class/drm")
+    if not drm_dir.exists():
+        return {"displays": displays}
+    for card in sorted(drm_dir.iterdir(), key=lambda p: p.name):
+        if not card.is_dir():
+            continue
+        status_path = card / "status"
+        if not status_path.exists():
+            continue
+        status = read_text(status_path).strip()
+        if status not in ("connected", "disconnected"):
+            continue
+        name = card.name
+        connector = name.split("-", 1)[1] if "-" in name else name
+        info = {
+            "name": name,
+            "connector": connector,
+            "status": status,
+            "enabled": status == "connected",
+        }
+        modes_path = card / "modes"
+        if modes_path.exists():
+            info["modes"] = read_text(modes_path).strip().split("\n")
+        else:
+            info["modes"] = []
+        edid_path = card / "edid"
+        if edid_path.exists():
+            edid_data = edid_path.read_bytes()
+            if len(edid_data) >= 128:
+                try:
+                    mfg_id = chr(64 + ((edid_data[8] >> 2) & 0x1f)) + chr(64 + (((edid_data[8] & 0x3) << 3) | ((edid_data[9] >> 5) & 0x7))) + chr(64 + (edid_data[9] & 0x1f))
+                    info["manufacturer"] = mfg_id
+                except Exception:
+                    info["manufacturer"] = ""
+                product_code = int.from_bytes(edid_data[10:12], "little")
+                info["product_code"] = str(product_code)
+                serial = int.from_bytes(edid_data[12:16], "little")
+                if serial:
+                    info["serial"] = str(serial)
+                week = edid_data[16]
+                year = edid_data[17] + 1990 if edid_data[17] else 0
+                if year:
+                    info["manufacture_year"] = str(year)
+                if week and week <= 54:
+                    info["manufacture_week"] = str(week)
+                h_cm = edid_data[21]
+                v_cm = edid_data[22]
+                if h_cm and v_cm:
+                    info["size_cm"] = f"{h_cm}×{v_cm}"
+                    diag_inch = round((h_cm ** 2 + v_cm ** 2) ** 0.5 / 2.54, 1)
+                    info["size_inch"] = str(diag_inch)
+                for offset in range(54, 108, 18):
+                    if offset + 5 > len(edid_data):
+                        break
+                    tag = edid_data[offset]
+                    if tag == 0xfc:
+                        descriptor = edid_data[offset + 5:offset + 18]
+                        info["monitor_name"] = descriptor.decode("ascii", errors="replace").strip().rstrip("\n").rstrip()
+                    elif tag == 0xfd:
+                        min_v = edid_data[offset + 5]
+                        max_v = edid_data[offset + 6]
+                        min_h = edid_data[offset + 7]
+                        max_h = edid_data[offset + 8]
+                        if min_v and max_v:
+                            info["vfreq_range"] = f"{min_v}-{max_v} Hz"
+                        if min_h and max_h:
+                            info["hfreq_range"] = f"{min_h}-{max_h} kHz"
+                    elif tag == 0xfe:
+                        descriptor = edid_data[offset + 5:offset + 18]
+                        info["serial_string"] = descriptor.decode("ascii", errors="replace").strip().rstrip("\n").rstrip()
+                    elif tag == 0xff:
+                        descriptor = edid_data[offset + 5:offset + 18]
+                        info["serial_string"] = descriptor.decode("ascii", errors="replace").strip().rstrip("\n").rstrip()
+                    elif tag == 0:
+                        pixel_clk = int.from_bytes(edid_data[offset:offset + 2], "little")
+                        if pixel_clk:
+                            h_active = int.from_bytes(edid_data[offset + 2:offset + 4], "little")
+                            v_active = int.from_bytes(edid_data[offset + 5:offset + 7], "little")
+                            if h_active and v_active:
+                                info["native_resolution"] = f"{h_active}×{v_active}"
+        dpms_path = card / "dpms"
+        if dpms_path.exists():
+            info["dpms"] = read_text(dpms_path).strip()
+        enabled_path = card / "enabled"
+        if enabled_path.exists():
+            info["drm_enabled"] = read_text(enabled_path).strip()
+        info["forced_off"] = _display_is_forced_off(name)
+        dithering_path = card / "dithering"
+        if dithering_path.exists():
+            info["dithering"] = read_text(dithering_path).strip()
+        parent_card = None
+        for parent in card.parents:
+            if re.match(r"card\d+$", parent.name) and (parent / "dev").exists():
+                parent_card = parent
+                break
+        if parent_card:
+            dev_str = read_text(parent_card / "dev").strip()
+            m = re.match(r"\d+:(\d+)", dev_str)
+            if m:
+                drm_minor = m.group(1)
+                force_path = Path(f"/sys/kernel/debug/dri/{drm_minor}/{connector}/force")
+                if force_path.exists():
+                    try:
+                        info["drm_force"] = read_text(force_path).strip()
+                    except Exception:
+                        pass
+        if "drm_force" not in info:
+            for minor_dir in sorted(Path("/sys/kernel/debug/dri").iterdir()):
+                if not minor_dir.name.isdigit():
+                    continue
+                force_path = minor_dir / connector / "force"
+                if force_path.exists():
+                    try:
+                        info["drm_force"] = read_text(force_path).strip()
+                    except Exception:
+                        pass
+                    break
+        displays.append(info)
+    return {"displays": displays}
+
+
+def _drm_force_connector(name, on):
+    connector = name.split("-", 1)[1] if "-" in name else name
+    for minor_dir in sorted(Path("/sys/kernel/debug/dri").iterdir()):
+        if not minor_dir.name.isdigit():
+            continue
+        force_path = minor_dir / connector / "force"
+        if force_path.exists():
+            try:
+                force_path.write_text("on" if on else "off", encoding="utf-8")
+                return True
+            except Exception:
+                pass
+    return False
+
+
+def _drm_read_dpms_states():
+    result = {}
+    import ctypes
+    import ctypes.util
+    libdrm_path = ctypes.util.find_library("drm")
+    if not libdrm_path:
+        return result
+    try:
+        libdrm = ctypes.CDLL(libdrm_path)
+    except OSError:
+        return result
+
+    DRM_MODE_OBJECT_CONNECTOR = 0xc0c0c0c0
+
+    libdrm.drmModeGetResources.restype = ctypes.c_void_p
+    libdrm.drmModeGetResources.argtypes = [ctypes.c_int]
+    libdrm.drmModeFreeResources.argtypes = [ctypes.c_void_p]
+    libdrm.drmModeObjectGetProperties.restype = ctypes.c_void_p
+    libdrm.drmModeObjectGetProperties.argtypes = [ctypes.c_int, ctypes.c_uint32, ctypes.c_uint32]
+    libdrm.drmModeFreeObjectProperties.argtypes = [ctypes.c_void_p]
+    libdrm.drmModeGetProperty.restype = ctypes.c_void_p
+    libdrm.drmModeGetProperty.argtypes = [ctypes.c_int, ctypes.c_uint32]
+    libdrm.drmModeFreeProperty.argtypes = [ctypes.c_void_p]
+
+    class DrmModeRes(ctypes.Structure):
+        _fields_ = [
+            ("count_fbs", ctypes.c_int), ("fb_id_ptr", ctypes.c_uint64),
+            ("count_crtcs", ctypes.c_int), ("crtc_id_ptr", ctypes.c_uint64),
+            ("count_connectors", ctypes.c_int), ("connector_id_ptr", ctypes.c_uint64),
+            ("count_encoders", ctypes.c_int), ("encoder_id_ptr", ctypes.c_uint64),
+            ("min_width", ctypes.c_uint32), ("max_width", ctypes.c_uint32),
+            ("min_height", ctypes.c_uint32), ("max_height", ctypes.c_uint32),
+        ]
+
+    class DrmModeObjProps(ctypes.Structure):
+        _fields_ = [
+            ("count_props", ctypes.c_int), ("props_ptr", ctypes.c_uint64),
+            ("prop_values_ptr", ctypes.c_uint64),
+        ]
+
+    class DrmModeProp(ctypes.Structure):
+        _fields_ = [
+            ("prop_id", ctypes.c_uint32),
+            ("flags", ctypes.c_uint32),
+            ("name", ctypes.c_char * 32),
+            ("count_values", ctypes.c_int),
+            ("values_ptr", ctypes.c_uint64),
+            ("count_enums", ctypes.c_int),
+            ("enums_ptr", ctypes.c_uint64),
+            ("count_blobs", ctypes.c_int),
+            ("blob_ids_ptr", ctypes.c_uint64),
+        ]
+
+    for card_dev in sorted(Path("/dev/dri").glob("card*")):
+        try:
+            fd = os.open(str(card_dev), os.O_RDWR | os.O_NONBLOCK | os.O_CLOEXEC)
+        except OSError:
+            continue
+        try:
+            res_ptr = libdrm.drmModeGetResources(fd)
+            if not res_ptr:
+                continue
+            try:
+                res = ctypes.cast(res_ptr, ctypes.POINTER(DrmModeRes)).contents
+                if res.count_connectors <= 0 or not res.connector_id_ptr:
+                    continue
+                conn_ids = list(ctypes.cast(
+                    ctypes.c_void_p(res.connector_id_ptr),
+                    ctypes.POINTER(ctypes.c_uint32 * res.count_connectors),
+                ).contents)
+            finally:
+                libdrm.drmModeFreeResources(res_ptr)
+
+            for cid in conn_ids:
+                props_ptr = libdrm.drmModeObjectGetProperties(fd, cid, DRM_MODE_OBJECT_CONNECTOR)
+                if not props_ptr:
+                    continue
+                try:
+                    props = ctypes.cast(props_ptr, ctypes.POINTER(DrmModeObjProps)).contents
+                    if props.count_props <= 0 or not props.props_ptr:
+                        continue
+                    prop_ids = ctypes.cast(
+                        ctypes.c_void_p(props.props_ptr),
+                        ctypes.POINTER(ctypes.c_uint32 * props.count_props),
+                    ).contents
+                    prop_values = ctypes.cast(
+                        ctypes.c_void_p(props.prop_values_ptr),
+                        ctypes.POINTER(ctypes.c_uint64 * props.count_props),
+                    ).contents
+                    conn_name = None
+                    dpms_val = None
+                    for i in range(props.count_props):
+                        prop_ptr = libdrm.drmModeGetProperty(fd, prop_ids[i])
+                        if not prop_ptr:
+                            continue
+                        try:
+                            prop = ctypes.cast(prop_ptr, ctypes.POINTER(DrmModeProp)).contents
+                            pname = prop.name.decode("utf-8", errors="replace")
+                            if pname == "DPMS":
+                                dpms_val = int(prop_values[i])
+                        finally:
+                            libdrm.drmModeFreeProperty(prop_ptr)
+                    if dpms_val is not None:
+                        result[cid] = dpms_val
+                finally:
+                    libdrm.drmModeFreeObjectProperties(props_ptr)
+        finally:
+            os.close(fd)
+    return result
+
+
+def _drm_get_card_dev(name):
+    card_path = Path(f"/sys/class/drm/{name}")
+    try:
+        card_path = card_path.resolve()
+    except Exception:
+        pass
+    for parent in card_path.parents:
+        if re.match(r"card\d+$", parent.name) and (parent / "dev").exists():
+            dev_str = read_text(parent / "dev").strip()
+            m = re.match(r"\d+:(\d+)", dev_str)
+            if m:
+                minor = int(m.group(1))
+                card_dev = Path(f"/dev/dri/card{minor}")
+                if card_dev.exists():
+                    return card_dev, minor
+    return None, None
+
+
+
+
+def _drm_dpms_control(name, on):
+    card_dev, minor = _drm_get_card_dev(name)
+    if not card_dev:
+        return False, "DRM card device not found"
+    connector_name = name.split("-", 1)[1] if "-" in name else name
+    import ctypes
+    import ctypes.util
+    libdrm_path = ctypes.util.find_library("drm")
+    if not libdrm_path:
+        return False, "libdrm not found"
+    try:
+        libdrm = ctypes.CDLL(libdrm_path)
+    except OSError:
+        return False, "failed to load libdrm"
+
+    fd = os.open(str(card_dev), os.O_RDWR | os.O_CLOEXEC)
+    try:
+        libdrm.drmSetMaster.restype = ctypes.c_int
+        libdrm.drmSetMaster.argtypes = [ctypes.c_int]
+        is_master = libdrm.drmSetMaster(fd) == 0
+
+        DRM_MODE_OBJECT_CONNECTOR = 0xc0c0c0c0
+
+        libdrm.drmModeGetResources.restype = ctypes.c_void_p
+        libdrm.drmModeGetResources.argtypes = [ctypes.c_int]
+        libdrm.drmModeFreeResources.argtypes = [ctypes.c_void_p]
+        libdrm.drmModeObjectGetProperties.restype = ctypes.c_void_p
+        libdrm.drmModeObjectGetProperties.argtypes = [ctypes.c_int, ctypes.c_uint32, ctypes.c_uint32]
+        libdrm.drmModeFreeObjectProperties.argtypes = [ctypes.c_void_p]
+        libdrm.drmModeGetProperty.restype = ctypes.c_void_p
+        libdrm.drmModeGetProperty.argtypes = [ctypes.c_int, ctypes.c_uint32]
+        libdrm.drmModeFreeProperty.argtypes = [ctypes.c_void_p]
+        libdrm.drmModeConnectorSetProperty.restype = ctypes.c_int
+        libdrm.drmModeConnectorSetProperty.argtypes = [ctypes.c_int, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint64]
+
+        class DrmModeRes(ctypes.Structure):
+            _fields_ = [
+                ("count_fbs", ctypes.c_int), ("fb_id_ptr", ctypes.c_uint64),
+                ("count_crtcs", ctypes.c_int), ("crtc_id_ptr", ctypes.c_uint64),
+                ("count_connectors", ctypes.c_int), ("connector_id_ptr", ctypes.c_uint64),
+                ("count_encoders", ctypes.c_int), ("encoder_id_ptr", ctypes.c_uint64),
+                ("min_width", ctypes.c_uint32), ("max_width", ctypes.c_uint32),
+                ("min_height", ctypes.c_uint32), ("max_height", ctypes.c_uint32),
+            ]
+
+        class DrmModeObjProps(ctypes.Structure):
+            _fields_ = [
+                ("count_props", ctypes.c_int), ("props_ptr", ctypes.c_uint64),
+                ("prop_values_ptr", ctypes.c_uint64),
+            ]
+
+        class DrmModeProp(ctypes.Structure):
+            _fields_ = [
+                ("prop_id", ctypes.c_uint32),
+                ("flags", ctypes.c_uint32),
+                ("name", ctypes.c_char * 32),
+                ("count_values", ctypes.c_int),
+                ("values_ptr", ctypes.c_uint64),
+                ("count_enums", ctypes.c_int),
+                ("enums_ptr", ctypes.c_uint64),
+                ("count_blobs", ctypes.c_int),
+                ("blob_ids_ptr", ctypes.c_uint64),
+            ]
+
+        res_ptr = libdrm.drmModeGetResources(fd)
+        if not res_ptr:
+            return False, "drmModeGetResources failed"
+
+        try:
+            res = ctypes.cast(res_ptr, ctypes.POINTER(DrmModeRes)).contents
+            if res.count_connectors <= 0 or not res.connector_id_ptr:
+                return False, "no connectors found"
+            conn_ids = list(ctypes.cast(
+                ctypes.c_void_p(res.connector_id_ptr),
+                ctypes.POINTER(ctypes.c_uint32 * res.count_connectors),
+            ).contents)
+        finally:
+            libdrm.drmModeFreeResources(res_ptr)
+
+        dpms_prop_id = None
+        target_conn_id = None
+        target_dir = Path(f"/sys/class/drm/card{minor}-{connector_name}")
+        target_connector_id_file = target_dir / "connector_id"
+        target_cid = None
+        if target_connector_id_file.exists():
+            try:
+                target_cid = int(read_text(target_connector_id_file).strip())
+            except Exception:
+                pass
+        for cid in conn_ids:
+            if target_cid is not None and cid != target_cid:
+                continue
+            props_ptr = libdrm.drmModeObjectGetProperties(fd, cid, DRM_MODE_OBJECT_CONNECTOR)
+            if not props_ptr:
+                continue
+            try:
+                props = ctypes.cast(props_ptr, ctypes.POINTER(DrmModeObjProps)).contents
+                if props.count_props <= 0 or not props.props_ptr:
+                    continue
+                prop_ids = ctypes.cast(
+                    ctypes.c_void_p(props.props_ptr),
+                    ctypes.POINTER(ctypes.c_uint32 * props.count_props),
+                ).contents
+                for i in range(props.count_props):
+                    prop_ptr = libdrm.drmModeGetProperty(fd, prop_ids[i])
+                    if not prop_ptr:
+                        continue
+                    try:
+                        prop = ctypes.cast(prop_ptr, ctypes.POINTER(DrmModeProp)).contents
+                        pname = prop.name.decode("utf-8", errors="replace")
+                        if pname == "DPMS":
+                            dpms_prop_id = prop_ids[i]
+                            target_conn_id = cid
+                            break
+                    finally:
+                        libdrm.drmModeFreeProperty(prop_ptr)
+                if dpms_prop_id:
+                    break
+            finally:
+                libdrm.drmModeFreeObjectProperties(props_ptr)
+
+        if not dpms_prop_id or not target_conn_id:
+            return False, f"DPMS property not found for {connector_name}"
+
+        dpms_value = 0 if on else 3
+        dpms_label = "On" if on else "Off"
+        ret = libdrm.drmModeConnectorSetProperty(fd, target_conn_id, dpms_prop_id, dpms_value)
+        if ret != 0:
+            if not is_master:
+                return False, "drmSetMaster failed"
+            return False, f"drmModeConnectorSetProperty(DPMS={dpms_label}) returned {ret}"
+
+        if on:
+            _drm_force_connector(name, True)
+
+        return True, None
+    finally:
+        try:
+            libdrm.drmDropMaster.restype = ctypes.c_int
+            libdrm.drmDropMaster.argtypes = [ctypes.c_int]
+            libdrm.drmDropMaster(fd)
+        except Exception:
+            pass
+        os.close(fd)
+
+
+def _fbdev_blank(on):
+    for fb in sorted(Path("/sys/class/graphics").glob("fb*")):
+        blank_path = fb / "blank"
+        if blank_path.exists():
+            try:
+                blank_path.write_text("0" if on else "3", encoding="utf-8")
+            except Exception:
+                pass
+
+
+def save_display(data):
+    action = data.get("display_action")
+    name = data.get("name")
+    if not name:
+        raise RuntimeError("display name is required")
+    target_on = action == "on"
+    any_ok = False
+    last_err = None
+
+    ok, err = _drm_dpms_control(name, target_on)
+    if ok:
+        any_ok = True
+    elif err:
+        last_err = err
+
+    if _drm_force_connector(name, target_on):
+        any_ok = True
+
+    for bl in sorted(Path("/sys/class/backlight").iterdir()):
+        bl_power = bl / "bl_power"
+        if bl_power.exists():
+            try:
+                bl_power.write_text("0" if target_on else "1", encoding="utf-8")
+                any_ok = True
+            except Exception:
+                pass
+
+    _fbdev_blank(target_on)
+
+    if not any_ok and not target_on:
+        if last_err:
+            raise RuntimeError(last_err)
+        raise RuntimeError("No available method to control display power (need DRM DPMS, DRM debugfs, backlight, or fbdev)")
+    _display_set_forced_off(name, not target_on)
+    write_display_service()
+    return {"display": read_display()}
+
+
+def write_display_service():
+    off_names = []
+    if DISPLAY_STATE_DIR.exists():
+        for marker in sorted(DISPLAY_STATE_DIR.glob("*.off")):
+            off_names.append(marker.stem)
+    if off_names:
+        script = f"""#!/usr/bin/env python3
+import os, ctypes, ctypes.util, re, sys
+from pathlib import Path
+
+state_dir = Path({repr(str(DISPLAY_STATE_DIR))})
+off_names = [p.stem for p in sorted(state_dir.glob('*.off'))]
+if not off_names:
+    sys.exit(0)
+
+def try_debugfs_force(conn_name):
+    for minor_dir in sorted(Path('/sys/kernel/debug/dri').iterdir()):
+        if not minor_dir.name.isdigit():
+            continue
+        force_path = minor_dir / conn_name / 'force'
+        if force_path.exists():
+            try:
+                force_path.write_text('off', encoding='utf-8')
+                return True
+            except Exception:
+                pass
+    return False
+
+def try_backlight():
+    for bl in sorted(Path('/sys/class/backlight').iterdir()):
+        bl_power = bl / 'bl_power'
+        if bl_power.exists():
+            try:
+                bl_power.write_text('1', encoding='utf-8')
+            except Exception:
+                pass
+
+def try_fbdev_blank():
+    for fb in sorted(Path('/sys/class/graphics').glob('fb*')):
+        blank_path = fb / 'blank'
+        if blank_path.exists():
+            try:
+                blank_path.write_text('3', encoding='utf-8')
+            except Exception:
+                pass
+
+libdrm_path = ctypes.util.find_library('drm')
+libdrm = None
+if libdrm_path:
+    try:
+        libdrm = ctypes.CDLL(libdrm_path)
+    except OSError:
+        pass
+
+for name in off_names:
+    card_path = Path(f'/sys/class/drm/{{name}}')
+    try:
+        card_path = card_path.resolve()
+    except Exception:
+        pass
+    card_dev = None
+    minor = None
+    for parent in card_path.parents:
+        if re.match(r'card\\d+$', parent.name) and (parent / 'dev').exists():
+            dev_str = (parent / 'dev').read_text().strip()
+            m = re.match(r'\\d+:(\\d+)', dev_str)
+            if m:
+                minor = int(m.group(1))
+                card_dev = Path(f'/dev/dri/card{{minor}}')
+                break
+    connector_name = name.split('-', 1)[1] if '-' in name else name
+    done = False
+    if not done and card_dev and card_dev.exists() and libdrm:
+        try:
+            fd = os.open(str(card_dev), os.O_RDWR | os.O_CLOEXEC)
+        except OSError:
+            fd = None
+        if fd is not None:
+            try:
+                libdrm.drmSetMaster.restype = ctypes.c_int
+                libdrm.drmSetMaster.argtypes = [ctypes.c_int]
+                is_master = libdrm.drmSetMaster(fd) == 0
+                DRM_MODE_OBJECT_CONNECTOR = 0xc0c0c0c0
+                libdrm.drmModeGetResources.restype = ctypes.c_void_p
+                libdrm.drmModeGetResources.argtypes = [ctypes.c_int]
+                libdrm.drmModeFreeResources.argtypes = [ctypes.c_void_p]
+                libdrm.drmModeObjectGetProperties.restype = ctypes.c_void_p
+                libdrm.drmModeObjectGetProperties.argtypes = [ctypes.c_int, ctypes.c_uint32, ctypes.c_uint32]
+                libdrm.drmModeFreeObjectProperties.argtypes = [ctypes.c_void_p]
+                libdrm.drmModeGetProperty.restype = ctypes.c_void_p
+                libdrm.drmModeGetProperty.argtypes = [ctypes.c_int, ctypes.c_uint32]
+                libdrm.drmModeFreeProperty.argtypes = [ctypes.c_void_p]
+                libdrm.drmModeConnectorSetProperty.restype = ctypes.c_int
+                libdrm.drmModeConnectorSetProperty.argtypes = [ctypes.c_int, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint64]
+                class DrmModeRes(ctypes.Structure):
+                    _fields_ = [('count_fbs', ctypes.c_int), ('fb_id_ptr', ctypes.c_uint64), ('count_crtcs', ctypes.c_int), ('crtc_id_ptr', ctypes.c_uint64), ('count_connectors', ctypes.c_int), ('connector_id_ptr', ctypes.c_uint64), ('count_encoders', ctypes.c_int), ('encoder_id_ptr', ctypes.c_uint64), ('min_width', ctypes.c_uint32), ('max_width', ctypes.c_uint32), ('min_height', ctypes.c_uint32), ('max_height', ctypes.c_uint32)]
+                class DrmModeObjProps(ctypes.Structure):
+                    _fields_ = [('count_props', ctypes.c_int), ('props_ptr', ctypes.c_uint64), ('prop_values_ptr', ctypes.c_uint64)]
+                class DrmModeProp(ctypes.Structure):
+                    _fields_ = [('prop_id', ctypes.c_uint32), ('flags', ctypes.c_uint32), ('name', ctypes.c_char * 32), ('count_values', ctypes.c_int), ('values_ptr', ctypes.c_uint64), ('count_enums', ctypes.c_int), ('enums_ptr', ctypes.c_uint64), ('count_blobs', ctypes.c_int), ('blob_ids_ptr', ctypes.c_uint64)]
+                res_ptr = libdrm.drmModeGetResources(fd)
+                if res_ptr:
+                    try:
+                        res = ctypes.cast(res_ptr, ctypes.POINTER(DrmModeRes)).contents
+                        if res.count_connectors > 0 and res.connector_id_ptr:
+                            conn_ids = list(ctypes.cast(ctypes.c_void_p(res.connector_id_ptr), ctypes.POINTER(ctypes.c_uint32 * res.count_connectors)).contents)
+                            target_dir = Path(f'/sys/class/drm/card{{minor}}-{{connector_name}}')
+                            target_cid = None
+                            cid_file = target_dir / 'connector_id'
+                            if cid_file.exists():
+                                try:
+                                    target_cid = int(cid_file.read_text().strip())
+                                except Exception:
+                                    pass
+                            dpms_prop_id = None
+                            target_conn_id = None
+                            for cid in conn_ids:
+                                if target_cid is not None and cid != target_cid:
+                                    continue
+                                props_ptr = libdrm.drmModeObjectGetProperties(fd, cid, DRM_MODE_OBJECT_CONNECTOR)
+                                if not props_ptr:
+                                    continue
+                                try:
+                                    props = ctypes.cast(props_ptr, ctypes.POINTER(DrmModeObjProps)).contents
+                                    if props.count_props <= 0 or not props.props_ptr:
+                                        continue
+                                    prop_ids = ctypes.cast(ctypes.c_void_p(props.props_ptr), ctypes.POINTER(ctypes.c_uint32 * props.count_props)).contents
+                                    for i in range(props.count_props):
+                                        prop_ptr = libdrm.drmModeGetProperty(fd, prop_ids[i])
+                                        if not prop_ptr:
+                                            continue
+                                        try:
+                                            prop = ctypes.cast(prop_ptr, ctypes.POINTER(DrmModeProp)).contents
+                                            if prop.name.decode('utf-8', errors='replace') == 'DPMS':
+                                                dpms_prop_id = prop_ids[i]
+                                                target_conn_id = cid
+                                                break
+                                        finally:
+                                            libdrm.drmModeFreeProperty(prop_ptr)
+                                    if dpms_prop_id:
+                                        break
+                                finally:
+                                    libdrm.drmModeFreeObjectProperties(props_ptr)
+                            if dpms_prop_id and target_conn_id:
+                                ret = libdrm.drmModeConnectorSetProperty(fd, target_conn_id, dpms_prop_id, 3)
+                                if ret == 0:
+                                    done = True
+                    finally:
+                        libdrm.drmModeFreeResources(res_ptr)
+            finally:
+                try:
+                    libdrm.drmDropMaster.restype = ctypes.c_int
+                    libdrm.drmDropMaster.argtypes = [ctypes.c_int]
+                    libdrm.drmDropMaster(fd)
+                except Exception:
+                    pass
+                os.close(fd)
+    if not done:
+        try_debugfs_force(connector_name)
+    try_backlight()
+    try_fbdev_blank()
+"""
+        DISPLAY_APPLY.write_text(script, encoding="utf-8")
+    else:
+        DISPLAY_APPLY.write_text("#!/bin/sh\n# No displays forced off\n", encoding="utf-8")
+    os.chmod(DISPLAY_APPLY, 0o755)
+    DISPLAY_SERVICE.write_text("""[Unit]
+Description=Apply fn advanced display DPMS settings
+After=sysinit.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fn-advancedsettings-display-apply
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+""", encoding="utf-8")
+    if shutil_which("systemctl"):
+        run(["systemctl", "daemon-reload"], timeout=15)
+        run(["systemctl", "enable", "fn-advancedsettings-display.service"], timeout=15)
+
+
 def read_cpu():
     cpus = []
     policies = []
     for cpu in sorted(Path("/sys/devices/system/cpu").glob("cpu[0-9]*"), key=lambda p: int(p.name[3:])):
         gov_path = cpu / "cpufreq/scaling_governor"
         if gov_path.exists():
-            cpus.append({
+            cpu_info = {
                 "name": cpu.name,
                 "min_freq": read_text(cpu / "cpufreq/scaling_min_freq").strip(),
                 "max_freq": read_text(cpu / "cpufreq/scaling_max_freq").strip(),
                 "cur_freq": read_text(cpu / "cpufreq/scaling_cur_freq").strip(),
                 "governor": read_text(gov_path).strip(),
                 "available_governors": read_text(cpu / "cpufreq/scaling_available_governors").strip().split(),
-            })
+                "scaling_driver": read_text(cpu / "cpufreq/scaling_driver").strip(),
+            }
+            epp_path = cpu / "cpufreq/energy_performance_preference"
+            if epp_path.exists():
+                cpu_info["epp"] = read_text(epp_path).strip()
+                cpu_info["available_epp"] = read_text(cpu / "cpufreq/energy_performance_available_preferences").strip().split()
+            boost_path = cpu / "cpufreq/boost"
+            if boost_path.exists():
+                cpu_info["boost"] = read_text(boost_path).strip()
+            cpus.append(cpu_info)
     policy_root = Path("/sys/devices/system/cpu/cpufreq")
     for policy in sorted(policy_root.glob("policy*"), key=lambda p: int(p.name[6:])):
-        policies.append({
+        policy_info = {
             "name": policy.name,
             "min_freq": read_text(policy / "scaling_min_freq").strip(),
             "max_freq": read_text(policy / "scaling_max_freq").strip(),
             "cur_freq": read_text(policy / "scaling_cur_freq").strip() or read_text(policy / "cpuinfo_cur_freq").strip(),
             "governor": read_text(policy / "scaling_governor").strip(),
             "available_governors": read_text(policy / "scaling_available_governors").strip().split(),
-        })
-    return {"cpus": cpus, "policies": policies}
+            "scaling_driver": read_text(policy / "scaling_driver").strip(),
+        }
+        epp_path = policy / "energy_performance_preference"
+        if epp_path.exists():
+            policy_info["epp"] = read_text(epp_path).strip()
+            policy_info["available_epp"] = read_text(policy / "energy_performance_available_preferences").strip().split()
+        boost_path = policy / "boost"
+        if boost_path.exists():
+            policy_info["boost"] = read_text(boost_path).strip()
+        policies.append(policy_info)
+    extra = {}
+    intel_pstate_dir = Path("/sys/devices/system/cpu/intel_pstate")
+    if intel_pstate_dir.exists():
+        extra["intel_pstate"] = True
+        extra["intel_pstate_status"] = read_text(intel_pstate_dir / "status").strip()
+        no_turbo_path = intel_pstate_dir / "no_turbo"
+        if no_turbo_path.exists():
+            extra["no_turbo"] = read_text(no_turbo_path).strip()
+    amd_pstate_dir = Path("/sys/devices/system/cpu/amd_pstate")
+    if amd_pstate_dir.exists():
+        extra["amd_pstate"] = True
+        extra["amd_pstate_status"] = read_text(amd_pstate_dir / "status").strip()
+        prefcore_path = amd_pstate_dir / "prefcore"
+        if prefcore_path.exists():
+            extra["amd_pstate_prefcore"] = read_text(prefcore_path).strip()
+    global_boost_path = Path("/sys/devices/system/cpu/cpufreq/boost")
+    if global_boost_path.exists():
+        extra["boost"] = read_text(global_boost_path).strip()
+    return {"cpus": cpus, "policies": policies, "extra": extra}
 
 
 def save_cpu(data):
@@ -439,6 +1151,28 @@ def save_cpu(data):
             ok, msg = write_sysfs(target / "scaling_governor", settings["governor"])
             if not ok:
                 errors.append(f"{target}: {msg}")
+        if settings.get("epp") and (target / "energy_performance_preference").exists():
+            ok, msg = write_sysfs(target / "energy_performance_preference", settings["epp"])
+            if not ok:
+                errors.append(f"{target} epp: {msg}")
+    if settings.get("boost") is not None:
+        boost_path = Path("/sys/devices/system/cpu/cpufreq/boost")
+        if boost_path.exists():
+            ok, msg = write_sysfs(boost_path, settings["boost"])
+            if not ok:
+                errors.append(f"boost: {msg}")
+    if settings.get("no_turbo") is not None:
+        no_turbo_path = Path("/sys/devices/system/cpu/intel_pstate/no_turbo")
+        if no_turbo_path.exists():
+            ok, msg = write_sysfs(no_turbo_path, settings["no_turbo"])
+            if not ok:
+                errors.append(f"no_turbo: {msg}")
+    if settings.get("amd_pstate_prefcore") is not None:
+        prefcore_path = Path("/sys/devices/system/cpu/amd_pstate/prefcore")
+        if prefcore_path.exists():
+            ok, msg = write_sysfs(prefcore_path, settings["amd_pstate_prefcore"])
+            if not ok:
+                errors.append(f"amd_pstate_prefcore: {msg}")
     state = load_state()
     state["cpu"] = settings
     save_state(state)
@@ -460,7 +1194,15 @@ def write_cpu_service(settings):
         lines.append(f"  [ -w \"$target/scaling_max_freq\" ] && printf '%s' {shell_quote(settings['max_freq'])} > \"$target/scaling_max_freq\" || true")
     if settings.get("governor"):
         lines.append(f"  [ -w \"$target/scaling_governor\" ] && printf '%s' {shell_quote(settings['governor'])} > \"$target/scaling_governor\" || true")
+    if settings.get("epp"):
+        lines.append(f"  [ -w \"$target/energy_performance_preference\" ] && printf '%s' {shell_quote(settings['epp'])} > \"$target/energy_performance_preference\" || true")
     lines.append("done")
+    if settings.get("boost") is not None:
+        lines.append(f"[ -w /sys/devices/system/cpu/cpufreq/boost ] && printf '%s' {shell_quote(str(settings['boost']))} > /sys/devices/system/cpu/cpufreq/boost || true")
+    if settings.get("no_turbo") is not None:
+        lines.append(f"[ -w /sys/devices/system/cpu/intel_pstate/no_turbo ] && printf '%s' {shell_quote(str(settings['no_turbo']))} > /sys/devices/system/cpu/intel_pstate/no_turbo || true")
+    if settings.get("amd_pstate_prefcore") is not None:
+        lines.append(f"[ -w /sys/devices/system/cpu/amd_pstate/prefcore ] && printf '%s' {shell_quote(str(settings['amd_pstate_prefcore']))} > /sys/devices/system/cpu/amd_pstate/prefcore || true")
     CPU_APPLY.write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.chmod(CPU_APPLY, 0o755)
     CPU_SERVICE.write_text("""[Unit]
@@ -544,6 +1286,47 @@ def parse_ethtool_link_modes(text, title):
     return modes
 
 
+def read_tcp():
+    tcp = {}
+    cc_path = Path("/proc/sys/net/ipv4/tcp_congestion_control")
+    avail_path = Path("/proc/sys/net/ipv4/tcp_available_congestion_control")
+    if cc_path.exists():
+        tcp["congestion_control"] = read_text(cc_path).strip()
+    if avail_path.exists():
+        for mod in ["tcp_bbr", "tcp_bbr2", "tcp_dctcp", "tcp_cdg", "tcp_nv", "tcp_veno", "tcp_westwood", "tcp_htcp", "tcp_hybla", "tcp_scalable", "tcp_lp", "tcp_yeah", "tcp_illinois"]:
+            if shutil_which("modprobe"):
+                run(["modprobe", mod], timeout=5)
+        tcp["available_congestion_control"] = read_text(avail_path).strip().split()
+    fastopen_path = Path("/proc/sys/net/ipv4/tcp_fastopen")
+    if fastopen_path.exists():
+        tcp["fastopen"] = read_text(fastopen_path).strip()
+    syncookies_path = Path("/proc/sys/net/ipv4/tcp_syncookies")
+    if syncookies_path.exists():
+        tcp["syncookies"] = read_text(syncookies_path).strip()
+    tw_reuse_path = Path("/proc/sys/net/ipv4/tcp_tw_reuse")
+    if tw_reuse_path.exists():
+        tcp["tw_reuse"] = read_text(tw_reuse_path).strip()
+    fin_timeout_path = Path("/proc/sys/net/ipv4/tcp_fin_timeout")
+    if fin_timeout_path.exists():
+        tcp["fin_timeout"] = read_text(fin_timeout_path).strip()
+    keepalive_time_path = Path("/proc/sys/net/ipv4/tcp_keepalive_time")
+    if keepalive_time_path.exists():
+        tcp["keepalive_time"] = read_text(keepalive_time_path).strip()
+    sack_path = Path("/proc/sys/net/ipv4/tcp_sack")
+    if sack_path.exists():
+        tcp["sack"] = read_text(sack_path).strip()
+    timestamps_path = Path("/proc/sys/net/ipv4/tcp_timestamps")
+    if timestamps_path.exists():
+        tcp["timestamps"] = read_text(timestamps_path).strip()
+    window_scaling_path = Path("/proc/sys/net/ipv4/tcp_window_scaling")
+    if window_scaling_path.exists():
+        tcp["window_scaling"] = read_text(window_scaling_path).strip()
+    mtu_probing_path = Path("/proc/sys/net/ipv4/tcp_mtu_probing")
+    if mtu_probing_path.exists():
+        tcp["mtu_probing"] = read_text(mtu_probing_path).strip()
+    return tcp
+
+
 def list_network():
     items = []
     for iface in sorted(Path("/sys/class/net").iterdir(), key=lambda p: p.name):
@@ -563,11 +1346,133 @@ def list_network():
             "supported_wol": ethtool.get("Supports Wake-on") or "",
             "supported_link_modes": ethtool.get("supported_link_modes") or [],
         })
-    return {"interfaces": items, "saved": load_state().get("network", {})}
+    return {"interfaces": items, "saved": load_state().get("network", {}), "bridges": read_bridges(), "available_ifaces": [i["name"] for i in items], "tcp": read_tcp()}
 
 
-def write_network_service(network):
+BRIDGE_PORT_STATES = {0: "disabled", 1: "listening", 2: "learning", 3: "forwarding", 4: "blocking"}
+
+
+def read_bridges():
+    bridges = []
+    for bridge_dir in sorted(Path("/sys/class/net").glob("*/bridge")):
+        iface_dir = bridge_dir.parent
+        name = iface_dir.name
+        stp = read_text(bridge_dir / "stp_state").strip()
+        forward_delay = read_text(bridge_dir / "forward_delay").strip()
+        hello_time = read_text(bridge_dir / "hello_time").strip()
+        max_age = read_text(bridge_dir / "max_age").strip()
+        vlan_filtering = read_text(bridge_dir / "vlan_filtering").strip() if (bridge_dir / "vlan_filtering").exists() else "0"
+        default_pvid = read_text(bridge_dir / "default_pvid").strip() if (bridge_dir / "default_pvid").exists() else "1"
+        members = []
+        brif_dir = iface_dir / "brif"
+        if brif_dir.exists():
+            for member_dir in sorted(brif_dir.iterdir()):
+                if not member_dir.is_dir():
+                    continue
+                mname = member_dir.name
+                state_val = read_text(member_dir / "state").strip() if (member_dir / "state").exists() else ""
+                state_name = BRIDGE_PORT_STATES.get(int(state_val) if state_val.isdigit() else -1, state_val or "unknown")
+                priority = read_text(member_dir / "priority").strip() if (member_dir / "priority").exists() else "32"
+                cost = read_text(member_dir / "path_cost").strip() if (member_dir / "path_cost").exists() else "0"
+                members.append({"name": mname, "state": state_name, "priority": priority, "cost": cost})
+        bridges.append({
+            "name": name,
+            "stp": stp == "1",
+            "forward_delay": forward_delay,
+            "hello_time": hello_time,
+            "max_age": max_age,
+            "vlan_filtering": vlan_filtering == "1",
+            "default_pvid": default_pvid,
+            "members": members,
+        })
+    return bridges
+
+
+def save_bridge(data):
+    results = []
+    action = data.get("bridge_action")
+    state = load_state()
+    bridges = state.get("bridges", {})
+    if action == "create":
+        name = str(data.get("name") or "").strip()
+        if not name or not re.match(r"^[A-Za-z0-9_.-]+$", name):
+            raise RuntimeError("Invalid bridge name")
+        if (Path("/sys/class/net") / name).exists():
+            raise RuntimeError(f"Interface {name} already exists")
+        results.append(run(["ip", "link", "add", "name", name, "type", "bridge"], timeout=15))
+        stp = bool(data.get("stp"))
+        if stp:
+            stp_path = Path(f"/sys/class/net/{name}/bridge/stp_state")
+            if stp_path.exists():
+                try:
+                    stp_path.write_text("1", encoding="utf-8")
+                except Exception:
+                    results.append(run(["ip", "link", "set", name, "type", "bridge", "stp_state", "1"], timeout=10))
+        results.append(run(["ip", "link", "set", name, "up"], timeout=10))
+        bridges[name] = {"stp": stp, "members": []}
+    elif action == "delete":
+        name = str(data.get("name") or "").strip()
+        if not name:
+            raise RuntimeError("Bridge name is required")
+        results.append(run(["ip", "link", "set", name, "down"], timeout=10))
+        results.append(run(["ip", "link", "del", name], timeout=15))
+        bridges.pop(name, None)
+    elif action == "add_member":
+        name = str(data.get("name") or "").strip()
+        member = str(data.get("member") or "").strip()
+        if not name or not member:
+            raise RuntimeError("Bridge name and member are required")
+        results.append(run(["ip", "link", "set", member, "master", name], timeout=10))
+        if name in bridges:
+            members = bridges[name].setdefault("members", [])
+            if member not in members:
+                members.append(member)
+    elif action == "remove_member":
+        name = str(data.get("name") or "").strip()
+        member = str(data.get("member") or "").strip()
+        if not name or not member:
+            raise RuntimeError("Bridge name and member are required")
+        results.append(run(["ip", "link", "set", member, "nomaster"], timeout=10))
+        if name in bridges:
+            bridges[name].setdefault("members", [])
+            if member in bridges[name]["members"]:
+                bridges[name]["members"].remove(member)
+    elif action == "update_stp":
+        name = str(data.get("name") or "").strip()
+        stp = data.get("stp", False)
+        if not name:
+            raise RuntimeError("Bridge name is required")
+        stp_path = Path(f"/sys/class/net/{name}/bridge/stp_state")
+        if stp_path.exists():
+            try:
+                stp_path.write_text("1" if stp else "0", encoding="utf-8")
+            except Exception:
+                results.append(run(["ip", "link", "set", name, "type", "bridge", "stp_state", "1" if stp else "0"], timeout=10))
+        else:
+            results.append(run(["ip", "link", "set", name, "type", "bridge", "stp_state", "1" if stp else "0"], timeout=10))
+        if name in bridges:
+            bridges[name]["stp"] = bool(stp)
+    state["bridges"] = bridges
+    save_state(state)
+    write_network_service(state.get("network", {}), bridges)
+    return {"bridges": read_bridges(), "available_ifaces": [i["name"] for i in list_network()["interfaces"]], "results": results}
+
+
+def write_network_service(network, bridges=None):
     lines = ["#!/bin/sh", "set -eu"]
+    if bridges:
+        for bname, bcfg in sorted(bridges.items()):
+            safe_bname = re.sub(r"[^A-Za-z0-9_.:-]", "", bname)
+            if not safe_bname:
+                continue
+            lines.append(f"ip link add name {safe_bname} type bridge || true")
+            if bcfg.get("stp"):
+                lines.append(f"ip link set {safe_bname} type bridge stp_state 1 || true")
+            lines.append(f"ip link set {safe_bname} up || true")
+            for member in bcfg.get("members") or []:
+                safe_member = re.sub(r"[^A-Za-z0-9_.:-]", "", member)
+                if safe_member:
+                    lines.append(f"ip link set {safe_member} master {safe_bname} || true")
     for iface, cfg in sorted(network.items()):
         safe_iface = re.sub(r"[^A-Za-z0-9_.:-]", "", iface)
         if not safe_iface:
@@ -616,11 +1521,69 @@ def save_network(data):
         name = item.get("name")
         if name:
             network[name] = item
+    tcp = data.get("tcp") or {}
+    if tcp:
+        state["tcp"] = tcp
+        apply_tcp(tcp)
     state["network"] = network
     save_state(state)
-    write_network_service(network)
+    write_network_service(network, state.get("bridges"))
     result = run([str(NETWORK_APPLY)], timeout=30)
     return {"network": list_network(), "results": [result]}
+
+
+TCP_SYSCTL_MAP = {
+    "congestion_control": "net.ipv4.tcp_congestion_control",
+    "fastopen": "net.ipv4.tcp_fastopen",
+    "syncookies": "net.ipv4.tcp_syncookies",
+    "tw_reuse": "net.ipv4.tcp_tw_reuse",
+    "fin_timeout": "net.ipv4.tcp_fin_timeout",
+    "keepalive_time": "net.ipv4.tcp_keepalive_time",
+    "sack": "net.ipv4.tcp_sack",
+    "timestamps": "net.ipv4.tcp_timestamps",
+    "window_scaling": "net.ipv4.tcp_window_scaling",
+    "mtu_probing": "net.ipv4.tcp_mtu_probing",
+}
+
+TCP_CC_MODULES = {
+    "bbr": "tcp_bbr", "bbr2": "tcp_bbr2", "dctcp": "tcp_dctcp",
+    "cdg": "tcp_cdg", "nv": "tcp_nv", "veno": "tcp_veno",
+    "westwood": "tcp_westwood", "htcp": "tcp_htcp", "hybla": "tcp_hybla",
+    "scalable": "tcp_scalable", "lp": "tcp_lp", "yeah": "tcp_yeah",
+    "illinois": "tcp_illinois",
+}
+
+TCP_MODULES_LOAD = Path("/etc/modules-load.d/fn-advancedsettings-tcp.conf")
+
+
+def apply_tcp(tcp):
+    sysctl_lines = ["# Managed by fn-advancedsettings"]
+    modules = []
+    for key, sysctl_key in TCP_SYSCTL_MAP.items():
+        value = tcp.get(key)
+        if value is not None:
+            sysctl_lines.append(f"{sysctl_key} = {value}")
+            if shutil_which("sysctl"):
+                run(["sysctl", "-w", f"{sysctl_key}={str(value)}"], timeout=10)
+            if key == "congestion_control" and str(value) in TCP_CC_MODULES:
+                mod_name = TCP_CC_MODULES[str(value)]
+                modules.append(mod_name)
+                if shutil_which("modprobe"):
+                    run(["modprobe", mod_name], timeout=5)
+    if len(sysctl_lines) > 1:
+        TCP_SYSCTL_CONF.write_text("\n".join(sysctl_lines) + "\n", encoding="utf-8")
+    else:
+        try:
+            TCP_SYSCTL_CONF.unlink()
+        except FileNotFoundError:
+            pass
+    if modules:
+        TCP_MODULES_LOAD.write_text("\n".join(["# Managed by fn-advancedsettings"] + modules) + "\n", encoding="utf-8")
+    else:
+        try:
+            TCP_MODULES_LOAD.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def parse_environment_proxy():
@@ -630,6 +1593,7 @@ def parse_environment_proxy():
 
 def save_proxy(data):
     proxy = data.get("proxy") or {}
+    targets = data.get("targets") or {}
     existing = parse_kv_file(read_text(PATHS["environment"]))
     for key in PROXY_KEYS:
         value = proxy.get(key, "")
@@ -648,20 +1612,94 @@ def save_proxy(data):
             exports.append(f"export {key.upper()}={shell_quote(proxy[key])}")
     PROXY_PROFILE.write_text("\n".join(exports) + "\n", encoding="utf-8")
     os.chmod(PROXY_PROFILE, 0o644)
-    apt_lines = []
-    if proxy.get("http_proxy"):
-        apt_lines.append(f'Acquire::http::Proxy "{proxy["http_proxy"]}";')
-    if proxy.get("https_proxy"):
-        apt_lines.append(f'Acquire::https::Proxy "{proxy["https_proxy"]}";')
-    if apt_lines:
-        PROXY_APT.write_text("\n".join(apt_lines) + "\n", encoding="utf-8")
-    elif PROXY_APT.exists():
-        PROXY_APT.unlink()
+    if targets.get("apt"):
+        apt_lines = []
+        if proxy.get("http_proxy"):
+            apt_lines.append(f'Acquire::http::Proxy "{proxy["http_proxy"]}";')
+        if proxy.get("https_proxy"):
+            apt_lines.append(f'Acquire::https::Proxy "{proxy["https_proxy"]}";')
+        if apt_lines:
+            PROXY_APT.write_text("\n".join(apt_lines) + "\n", encoding="utf-8")
+        elif PROXY_APT.exists():
+            PROXY_APT.unlink()
+    else:
+        if PROXY_APT.exists():
+            PROXY_APT.unlink()
+    if targets.get("docker"):
+        PROXY_DOCKER_DIR.mkdir(parents=True, exist_ok=True)
+        docker_lines = ["[Service]"]
+        if proxy.get("http_proxy"):
+            docker_lines.append(f'Environment="HTTP_PROXY={proxy["http_proxy"]}"')
+            docker_lines.append(f'Environment="http_proxy={proxy["http_proxy"]}"')
+        if proxy.get("https_proxy"):
+            docker_lines.append(f'Environment="HTTPS_PROXY={proxy["https_proxy"]}"')
+            docker_lines.append(f'Environment="https_proxy={proxy["https_proxy"]}"')
+        if proxy.get("no_proxy"):
+            docker_lines.append(f'Environment="NO_PROXY={proxy["no_proxy"]}"')
+            docker_lines.append(f'Environment="no_proxy={proxy["no_proxy"]}"')
+        if len(docker_lines) > 1:
+            PROXY_DOCKER_CONF.write_text("\n".join(docker_lines) + "\n", encoding="utf-8")
+        elif PROXY_DOCKER_CONF.exists():
+            PROXY_DOCKER_CONF.unlink()
+        run(["systemctl", "daemon-reload"], timeout=15)
+    else:
+        if PROXY_DOCKER_CONF.exists():
+            PROXY_DOCKER_CONF.unlink()
+            run(["systemctl", "daemon-reload"], timeout=15)
+    if targets.get("pip"):
+        pip_lines = ["[global]"]
+        pip_proxy = proxy.get("http_proxy") or proxy.get("https_proxy") or ""
+        if pip_proxy:
+            pip_lines.append(f"proxy = {pip_proxy}")
+            PROXY_PIP.write_text("\n".join(pip_lines) + "\n", encoding="utf-8")
+        elif PROXY_PIP.exists():
+            PROXY_PIP.unlink()
+    else:
+        if PROXY_PIP.exists():
+            PROXY_PIP.unlink()
+    if targets.get("npm"):
+        npm_lines = []
+        if proxy.get("http_proxy"):
+            npm_lines.append(f"proxy = {proxy['http_proxy']}")
+        if proxy.get("https_proxy"):
+            npm_lines.append(f"https-proxy = {proxy['https_proxy']}")
+        if proxy.get("no_proxy"):
+            npm_lines.append(f"noproxy = {proxy['no_proxy']}")
+        if npm_lines:
+            PROXY_NPM.write_text("\n".join(npm_lines) + "\n", encoding="utf-8")
+        elif PROXY_NPM.exists():
+            PROXY_NPM.unlink()
+    else:
+        if PROXY_NPM.exists():
+            PROXY_NPM.unlink()
+    if targets.get("git"):
+        git_lines = ["[http]"]
+        if proxy.get("http_proxy"):
+            git_lines.append(f"\tproxy = {proxy['http_proxy']}")
+        if proxy.get("https_proxy"):
+            git_lines.append(f"\tsslProxy = {proxy['https_proxy']}")
+        if proxy.get("no_proxy"):
+            no_proxy_list = ",".join(f"!{item.strip()}" for item in proxy["no_proxy"].split(",") if item.strip())
+            if no_proxy_list:
+                git_lines.append(f"\tnoProxy = {no_proxy_list}")
+        if len(git_lines) > 1:
+            PROXY_GIT.write_text("\n".join(git_lines) + "\n", encoding="utf-8")
+        elif PROXY_GIT.exists():
+            PROXY_GIT.unlink()
+    else:
+        if PROXY_GIT.exists():
+            PROXY_GIT.unlink()
     return {"proxy": read_proxy()}
 
 
 def read_proxy():
-    return {"values": parse_environment_proxy(), "profile": read_text(PROXY_PROFILE), "apt": read_text(PROXY_APT)}
+    targets = {}
+    targets["apt"] = PROXY_APT.exists()
+    targets["docker"] = PROXY_DOCKER_CONF.exists()
+    targets["pip"] = PROXY_PIP.exists()
+    targets["npm"] = PROXY_NPM.exists()
+    targets["git"] = PROXY_GIT.exists()
+    return {"values": parse_environment_proxy(), "targets": targets}
 
 
 def chattr(path, flag):
@@ -702,6 +1740,192 @@ def read_identity():
     return {"device_id": read_text(path).strip(), "backup": read_text(str(path) + ".bak").strip(), "backup_exists": Path(str(path) + ".bak").exists()}
 
 
+def read_device():
+    pci = []
+    pci_driver_map = {}
+    if shutil_which("lspci"):
+        result_k = run(["lspci", "-knn"], timeout=15)
+        if result_k["rc"] == 0:
+            current_slot = ""
+            current_driver = ""
+            current_modules = ""
+            for line in result_k["stdout"].splitlines():
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                header = re.match(r"^([0-9a-f:.]+)\s+", stripped)
+                if header:
+                    if current_slot:
+                        pci_driver_map[current_slot] = {"driver": current_driver, "modules": current_modules}
+                    current_slot = header.group(1)
+                    current_driver = ""
+                    current_modules = ""
+                else:
+                    driver_match = re.match(r"Kernel driver in use:\s*(.+)", stripped)
+                    if driver_match:
+                        current_driver = driver_match.group(1).strip()
+                    modules_match = re.match(r"Kernel modules:\s*(.+)", stripped)
+                    if modules_match:
+                        current_modules = modules_match.group(1).strip()
+            if current_slot:
+                pci_driver_map[current_slot] = {"driver": current_driver, "modules": current_modules}
+        result = run(["lspci", "-nn"], timeout=15)
+        if result["rc"] == 0:
+            for line in result["stdout"].splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                slot = ""
+                cls = ""
+                class_id = ""
+                desc = line
+                vendor_device = ""
+                match = re.match(r"^([0-9a-f:.]+)\s+(.+?)\s*\[([0-9a-f]{4})\]\s*:\s*(.+?)\s*\[([0-9a-f]{4}:[0-9a-f]{4})\]\s*$", line)
+                if match:
+                    slot = match.group(1)
+                    cls = match.group(2).strip()
+                    class_id = match.group(3)
+                    vendor_device = match.group(5)
+                    desc = match.group(4).strip()
+                else:
+                    match2 = re.match(r"^([0-9a-f:.]+)\s+(.+?)\s*\[([0-9a-f]{4})\]\s*:\s*(.+)$", line)
+                    if match2:
+                        slot = match2.group(1)
+                        cls = match2.group(2).strip()
+                        class_id = match2.group(3)
+                        desc = match2.group(4).strip()
+                    else:
+                        match3 = re.match(r"^([0-9a-f:.]+)\s+(.+)$", line)
+                        if match3:
+                            slot = match3.group(1)
+                            desc = match3.group(2).strip()
+                driver_info = pci_driver_map.get(slot, {})
+                pci.append({"slot": slot, "class": cls, "class_id": class_id, "device_id": vendor_device, "description": desc, "driver": driver_info.get("driver", ""), "modules": driver_info.get("modules", "")})
+
+    usb = []
+    usb_sysfs_drivers = {}
+    sysfs_usb = Path("/sys/bus/usb/devices")
+    if sysfs_usb.exists():
+        for dev_path in sysfs_usb.iterdir():
+            if not re.match(r"^\d+-[\d.]+$", dev_path.name):
+                continue
+            vid_file = dev_path / "idVendor"
+            pid_file = dev_path / "idProduct"
+            try:
+                vid = vid_file.read_text().strip() if vid_file.exists() else ""
+                pid = pid_file.read_text().strip() if pid_file.exists() else ""
+            except Exception:
+                continue
+            if not vid or not pid:
+                continue
+            drivers = set()
+            for iface in sorted(dev_path.glob(f"{dev_path.name}:*")):
+                drv_path = iface / "driver"
+                try:
+                    if drv_path.is_symlink():
+                        drv_name = drv_path.resolve().name
+                        if drv_name and drv_name != "usb":
+                            drivers.add(drv_name)
+                except Exception:
+                    pass
+            if not drivers:
+                drv_path = dev_path / "driver"
+                try:
+                    if drv_path.is_symlink():
+                        drv_name = drv_path.resolve().name
+                        if drv_name and drv_name != "usb":
+                            drivers.add(drv_name)
+                except Exception:
+                    pass
+            if drivers:
+                usb_sysfs_drivers[f"{vid}:{pid}"] = ", ".join(sorted(drivers))
+    if shutil_which("lsusb"):
+        result = run(["lsusb"], timeout=15)
+        if result["rc"] == 0:
+            for line in result["stdout"].splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                bus = ""
+                device = ""
+                id_vendor = ""
+                desc = line
+                match = re.match(r"^Bus\s+(\d+)\s+Device\s+(\d+):\s+ID\s+([0-9a-f]{4}:[0-9a-f]{4})\s*(.*)$", line)
+                if match:
+                    bus = match.group(1)
+                    device = match.group(2)
+                    id_vendor = match.group(3)
+                    desc = match.group(4).strip()
+                driver = usb_sysfs_drivers.get(id_vendor, "")
+                usb.append({"bus": bus, "device": device, "id": id_vendor, "description": desc, "driver": driver})
+
+    return {"pci": pci, "usb": usb}
+
+
+def parse_ss_output(text, proto):
+    entries = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("State") or line.startswith("Netid"):
+            continue
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        state_val = parts[0]
+        recv_q = parts[1]
+        send_q = parts[2]
+        local_addr = parts[3]
+        peer_addr = parts[4]
+        process = " ".join(parts[5:]) if len(parts) > 5 else ""
+        port = ""
+        addr = local_addr
+        if ":" in local_addr:
+            addr, port = local_addr.rsplit(":", 1)
+        process_name = ""
+        process_pid = ""
+        if process:
+            pid_match = re.search(r'pid=(\d+)', process)
+            name_match = re.search(r'\("([^"]+)"', process)
+            if pid_match:
+                process_pid = pid_match.group(1)
+            if name_match:
+                process_name = name_match.group(1)
+        entries.append({
+            "proto": proto,
+            "state": state_val,
+            "local_address": local_addr,
+            "addr": addr,
+            "port": port,
+            "peer_address": peer_addr,
+            "process": process,
+            "process_name": process_name,
+            "process_pid": process_pid,
+            "recv_q": recv_q,
+            "send_q": send_q,
+        })
+    return entries
+
+
+def read_port():
+    tcp = []
+    udp = []
+    if shutil_which("ss"):
+        result_tcp = run(["ss", "-tlnp"], timeout=15)
+        if result_tcp["rc"] == 0:
+            tcp = parse_ss_output(result_tcp["stdout"], "tcp")
+        result_udp = run(["ss", "-ulnp"], timeout=15)
+        if result_udp["rc"] == 0:
+            udp = parse_ss_output(result_udp["stdout"], "udp")
+    elif shutil_which("netstat"):
+        result_tcp = run(["netstat", "-tlnp"], timeout=15)
+        if result_tcp["rc"] == 0:
+            tcp = parse_ss_output(result_tcp["stdout"], "tcp")
+        result_udp = run(["netstat", "-ulnp"], timeout=15)
+        if result_udp["rc"] == 0:
+            udp = parse_ss_output(result_udp["stdout"], "udp")
+    return {"tcp": tcp, "udp": udp}
+
+
 def read_all():
     return {
         "ok": True,
@@ -713,6 +1937,9 @@ def read_all():
         "network": list_network(),
         "proxy": read_proxy(),
         "identity": read_identity(),
+        "device": read_device(),
+        "port": read_port(),
+        "display": read_display(),
     }
 
 
@@ -733,10 +1960,20 @@ def dispatch():
         json_response({"ok": True, **save_dns(body)})
     elif action == "saveNetwork":
         json_response({"ok": True, **save_network(body)})
+    elif action == "saveBridge":
+        json_response({"ok": True, **save_bridge(body)})
     elif action == "saveProxy":
         json_response({"ok": True, **save_proxy(body)})
     elif action == "saveIdentity":
         json_response({"ok": True, **save_identity(body)})
+    elif action == "readDevice":
+        json_response({"ok": True, "device": read_device()})
+    elif action == "readPort":
+        json_response({"ok": True, "port": read_port()})
+    elif action == "saveDisplay":
+        json_response({"ok": True, **save_display(body)})
+    elif action == "readDisplay":
+        json_response({"ok": True, "display": read_display()})
     else:
         json_response({"ok": False, "message": "unsupported action"}, 400)
 

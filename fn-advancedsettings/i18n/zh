@@ -1,6 +1,14 @@
 [common]
 display_name="高级设置"
-desc="管理启动、电源、SSH、CPU、DNS、网络、代理 设置。"
+desc="管理启动设置、电源设置、SSH设置、CPU设置、DNS设置、网络设置、代理设置、设备信息、端口信息。"
 
 [entry]
 title="高级设置"
+
+[wizard]
+uninstall_stepTitle="卸载向导"
+uninstall_item1_helpText="您即将卸载此应用。请选择如何处理应用配置和数据："
+uninstall_item1_label="数据保留选项"
+uninstall_item1_options1="保留数据 - 重安装时可恢复！（推荐）"
+uninstall_item1_options2="删除数据 - 此操作不可恢复！"
+uninstall_item1_rules="请选择数据保留选项"

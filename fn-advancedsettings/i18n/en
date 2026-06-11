@@ -1,6 +1,14 @@
 [common]
 display_name="Advanced Settings"
-desc="Manage boot, power, SSH, CPU, DNS, network, proxy settings."
+desc="Manage boot settings, power settings, SSH settings, CPU settings, DNS settings, network settings, proxy settings, device information, port information."
 
 [entry]
 title="Advanced Settings"
+
+[wizard]
+uninstall_stepTitle="Uninstall Wizard"
+uninstall_item1_helpText="You are about to uninstall this application. Please select how to handle application configuration and data:"
+uninstall_item1_label="Data retention options"
+uninstall_item1_options1="Retain data - can be restored during reinstallation! (Recommended)"
+uninstall_item1_options2="Delete data - this operation is irreversible!"
+uninstall_item1_rules="Please select data retention options"

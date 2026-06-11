@@ -2,4 +2,30 @@
 
 ### This script is called after the user uninstalls the application.
 
+systemctl disable fn-advancedsettings-cpu.service fn-advancedsettings-network.service fn-advancedsettings-display.service 2>/dev/null || true
+systemctl stop fn-advancedsettings-cpu.service fn-advancedsettings-network.service fn-advancedsettings-display.service 2>/dev/null || true
+
+rm -f /etc/systemd/system/fn-advancedsettings-cpu.service
+rm -f /etc/systemd/system/fn-advancedsettings-network.service
+rm -f /etc/systemd/system/fn-advancedsettings-display.service
+rm -f /usr/local/sbin/fn-advancedsettings-cpu-apply
+rm -f /usr/local/sbin/fn-advancedsettings-network-apply
+rm -f /usr/local/sbin/fn-advancedsettings-display-apply
+
+rm -f /etc/sysctl.d/99-fn-advancedsettings-tcp.conf
+rm -f /etc/modules-load.d/fn-advancedsettings-tcp.conf
+
+rm -f /etc/profile.d/fn-advancedsettings-proxy.sh
+rm -f /etc/apt/apt.conf.d/99fn-advancedsettings-proxy
+rm -f /etc/systemd/system/docker.service.d/proxy.conf
+rm -f /etc/pip.conf
+rm -f /etc/npmrc
+rm -f /etc/gitconfig
+
+systemctl daemon-reload 2>/dev/null || true
+
+[ "${wizard_data_action:-}" == "delete" ] && {
+  rm -rf /var/lib/fn-advancedsettings
+}
+
 exit 0
