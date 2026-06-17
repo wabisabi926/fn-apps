@@ -6,7 +6,10 @@ import mimetypes
 import os
 import signal
 import socketserver
+import subprocess
 import sys
+import threading
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
@@ -15,6 +18,25 @@ from urllib.parse import unquote, urlsplit
 APP_NAME = "fn-audioplayer"
 
 SUPPORTED_FORMATS = {"mp3", "wav", "ogg", "flac", "m4a", "aac", "wma", "ape"}
+
+
+def get_audio_env():
+    env = os.environ.copy()
+    if "PULSE_SERVER" in env and "pipewire" in env["PULSE_SERVER"].lower():
+        del env["PULSE_SERVER"]
+    if "PULSE_SERVER" not in env:
+        system_socket = "/var/run/pulse/native"
+        user_socket = f"/run/user/{os.getuid()}/pulse/native"
+        if os.path.exists(system_socket):
+            env["PULSE_SERVER"] = system_socket
+        elif os.path.exists(user_socket):
+            env["PULSE_SERVER"] = user_socket
+    if "XDG_RUNTIME_DIR" not in env:
+        for d in [f"/run/user/{os.getuid()}", "/run/user/0"]:
+            if os.path.isdir(d):
+                env["XDG_RUNTIME_DIR"] = d
+                break
+    return env
 
 MIME_TYPES = {
     ".mp3": "audio/mpeg",
@@ -140,6 +162,22 @@ class Handler(BaseHTTPRequestHandler):
             self.handle_lyrics(params)
         elif path == "/api/browse":
             self.handle_browse(params)
+        elif path == "/api/output/devices":
+            self.handle_output_devices()
+        elif path == "/api/output/status":
+            self.handle_output_status()
+        elif path == "/api/output/play":
+            self.handle_output_play()
+        elif path == "/api/output/stop":
+            self.handle_output_stop()
+        elif path == "/api/output/pause":
+            self.handle_output_pause()
+        elif path == "/api/output/resume":
+            self.handle_output_resume()
+        elif path == "/api/output/seek":
+            self.handle_output_seek()
+        elif path == "/api/output/volume":
+            self.handle_output_volume()
         else:
             self.json_response({"error": "Not found"}, 404)
 
@@ -477,6 +515,64 @@ class Handler(BaseHTTPRequestHandler):
         values = params.get(name)
         return values[0] if values else None
 
+    def _parse_json_body(self):
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            if content_length > 0:
+                body = self.rfile.read(content_length)
+                return json.loads(body.decode("utf-8"))
+        except Exception:
+            pass
+        return {}
+
+    def handle_output_devices(self):
+        devices = server_player.get_devices()
+        self.json_response({"devices": devices})
+
+    def handle_output_status(self):
+        server_player.touch_poll()
+        status = server_player.get_status()
+        self.json_response(status)
+
+    def handle_output_play(self):
+        data = self._parse_json_body()
+        file_path = data.get("file")
+        if not file_path:
+            self.json_response({"error": "Missing file parameter"}, 400)
+            return
+        if not os.path.exists(file_path):
+            self.json_response({"error": "File not found"}, 404)
+            return
+        sink = data.get("sink")
+        position = data.get("position", 0)
+        server_player.play(file_path, sink=sink, position=position)
+        self.json_response({"ok": True})
+
+    def handle_output_stop(self):
+        server_player.stop()
+        self.json_response({"ok": True})
+
+    def handle_output_pause(self):
+        server_player.pause()
+        self.json_response({"ok": True})
+
+    def handle_output_resume(self):
+        server_player.resume()
+        self.json_response({"ok": True})
+
+    def handle_output_seek(self):
+        data = self._parse_json_body()
+        position = data.get("position", 0)
+        server_player.seek(position)
+        self.json_response({"ok": True})
+
+    def handle_output_volume(self):
+        data = self._parse_json_body()
+        volume = data.get("volume", 70)
+        sink = data.get("sink")
+        server_player.set_volume(volume, sink=sink)
+        self.json_response({"ok": True})
+
 
 def _get_tag(tags, keys, default=""):
     for key in keys:
@@ -556,6 +652,201 @@ def format_file_size(size_bytes):
         size /= 1024
         i += 1
     return f"{round(size * 100) / 100} {units[i]}"
+
+
+class ServerPlayer:
+    def __init__(self):
+        self._process = None
+        self._lock = threading.Lock()
+        self._sink = None
+        self._file = None
+        self._volume = 70
+        self._state = "stopped"
+        self._start_time = 0
+        self._pause_position = 0
+        self._duration = 0
+        self._start_offset = 0
+        self._last_poll_time = 0
+        self._watcher_thread = threading.Thread(target=self._watcher, daemon=True)
+        self._watcher_thread.start()
+
+    def _watcher(self):
+        while True:
+            time.sleep(3)
+            with self._lock:
+                if self._state in ("playing", "paused") and self._last_poll_time > 0:
+                    if time.time() - self._last_poll_time > 5:
+                        self._stop_internal()
+                        self._state = "stopped"
+
+    def touch_poll(self):
+        with self._lock:
+            self._last_poll_time = time.time()
+
+    def get_devices(self):
+        try:
+            result = subprocess.run(
+                ["pactl", "list", "sinks"],
+                capture_output=True, text=True, timeout=5,
+                env=get_audio_env(),
+            )
+            devices = []
+            current = {}
+            for line in result.stdout.split("\n"):
+                stripped = line.strip()
+                if stripped.startswith("Sink #"):
+                    if current.get("id"):
+                        devices.append(current)
+                    current = {"index": stripped.split("#")[1].strip()}
+                elif stripped.startswith("Name:"):
+                    current["id"] = stripped.split(":", 1)[1].strip()
+                elif stripped.startswith("Description:"):
+                    current["name"] = stripped.split(":", 1)[1].strip()
+                elif stripped.startswith("State:"):
+                    current["state"] = stripped.split(":", 1)[1].strip()
+            if current.get("id"):
+                devices.append(current)
+            return devices
+        except Exception:
+            return []
+
+    def play(self, file_path, sink=None, position=0):
+        with self._lock:
+            self._stop_internal()
+            self._sink = sink
+            self._file = file_path
+            self._start_offset = position
+            self._duration = self._get_duration(file_path)
+            env = get_audio_env()
+            if sink:
+                env["PULSE_SINK"] = sink
+            cmd = ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"]
+            if position > 0:
+                cmd.extend(["-ss", str(position)])
+            cmd.append(file_path)
+            try:
+                self._process = subprocess.Popen(
+                    cmd, env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                self._state = "playing"
+                self._start_time = time.time() - position
+                self._pause_position = 0
+                t = threading.Thread(target=self._monitor, daemon=True)
+                t.start()
+            except Exception:
+                self._state = "stopped"
+
+    def _get_duration(self, file_path):
+        try:
+            result = subprocess.run(
+                ["ffprobe", "-v", "quiet", "-show_entries",
+                 "format=duration", "-of",
+                 "default=noprint_wrappers=1:nokey=1", file_path],
+                capture_output=True, text=True, timeout=10,
+            )
+            return float(result.stdout.strip())
+        except Exception:
+            return 0
+
+    def _monitor(self):
+        proc = self._process
+        if proc:
+            proc.wait()
+            with self._lock:
+                if self._state in ("playing", "paused") and self._process is proc:
+                    if proc.returncode == 0:
+                        self._state = "ended"
+                    else:
+                        self._state = "stopped"
+                    self._process = None
+
+    def stop(self):
+        with self._lock:
+            self._stop_internal()
+            self._state = "stopped"
+
+    def _stop_internal(self):
+        if self._process:
+            try:
+                self._process.terminate()
+                self._process.wait(timeout=3)
+            except Exception:
+                pass
+            if self._process.poll() is None:
+                try:
+                    self._process.kill()
+                    self._process.wait(timeout=3)
+                except Exception:
+                    pass
+            self._process = None
+
+    def pause(self):
+        with self._lock:
+            if self._process and self._state == "playing":
+                try:
+                    self._process.send_signal(signal.SIGSTOP)
+                    self._state = "paused"
+                    self._pause_position = time.time() - self._start_time
+                except Exception:
+                    pass
+
+    def resume(self):
+        with self._lock:
+            if self._process and self._state == "paused":
+                try:
+                    self._process.send_signal(signal.SIGCONT)
+                    self._state = "playing"
+                    self._start_time = time.time() - self._pause_position
+                except Exception:
+                    pass
+
+    def set_volume(self, volume, sink=None):
+        self._volume = volume
+        target_sink = sink or self._sink
+        if target_sink:
+            try:
+                pulse_vol = int(65536 * volume / 100)
+                subprocess.run(
+                    ["pactl", "set-sink-volume", target_sink, str(pulse_vol)],
+                    timeout=3,
+                    env=get_audio_env(),
+                )
+            except Exception:
+                pass
+
+    def seek(self, position):
+        with self._lock:
+            file_path = self._file
+            sink = self._sink
+            was_playing = self._state == "playing"
+            self._stop_internal()
+        if was_playing and file_path:
+            self.play(file_path, sink, position)
+        else:
+            with self._lock:
+                self._state = "stopped"
+                self._start_offset = position
+
+    def get_status(self):
+        with self._lock:
+            position = 0
+            if self._state == "playing":
+                position = time.time() - self._start_time
+            elif self._state == "paused":
+                position = self._pause_position
+            return {
+                "state": self._state,
+                "position": round(position, 2),
+                "duration": round(self._duration, 2),
+                "file": self._file,
+                "sink": self._sink,
+                "volume": self._volume,
+            }
+
+
+server_player = ServerPlayer()
 
 
 def main():

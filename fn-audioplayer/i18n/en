@@ -1,6 +1,6 @@
 [common]
 display_name="Audio Player"
-desc="Audio player application for playing audio files. Supports formats including mp3, wav, flac, ogg, m4a, aac, wma, ape, etc., and automatically loads lyrics files from the directory containing the audio files."
+desc="Audio player application for playing audio files. Supports formats including mp3, wav, flac, ogg, m4a, aac, wma, ape, etc., and automatically loads lyrics files from the directory containing the audio files. Supports both client and server modes."
 
 [entry]
 title="Audio Player"
