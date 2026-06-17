@@ -772,7 +772,7 @@ def relay_sockets(left, right):
 def main():
     parser = argparse.ArgumentParser(description="fn-p2s port-to-path proxy")
     parser.add_argument("--unix-socket", required=True)
-    parser.add_argument("--base-path", default="/app/p2s")
+    parser.add_argument("--base-path", default="/app/fn-p2s")
     parser.add_argument("--www-root", required=True)
     args = parser.parse_args()
 

@@ -5,7 +5,7 @@ PID_FILE="${TRIM_PKGVAR}/app.pid"
 SOCKET_PATH="${TRIM_APPDEST}/fn-p2s.sock"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
-CMD="\"${PYTHON_BIN}\" \"${TRIM_APPDEST}/server/p2s.py\" --unix-socket \"${SOCKET_PATH}\" --base-path \"/app/p2s\" --www-root \"${TRIM_APPDEST}/www\""
+CMD="\"${PYTHON_BIN}\" \"${TRIM_APPDEST}/server/p2s.py\" --unix-socket \"${SOCKET_PATH}\" --base-path \"/app/fn-p2s\" --www-root \"${TRIM_APPDEST}/www\""
 
 log_msg() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >>${LOG_FILE}
