@@ -166,6 +166,8 @@ class Handler(BaseHTTPRequestHandler):
             self.handle_output_devices()
         elif path == "/api/output/status":
             self.handle_output_status()
+        elif path == "/api/output/keepalive":
+            self.handle_output_keepalive()
         elif path == "/api/output/play":
             self.handle_output_play()
         elif path == "/api/output/stop":
@@ -534,6 +536,10 @@ class Handler(BaseHTTPRequestHandler):
         status = server_player.get_status()
         self.json_response(status)
 
+    def handle_output_keepalive(self):
+        server_player.touch_poll()
+        self.json_response({"ok": True})
+
     def handle_output_play(self):
         data = self._parse_json_body()
         file_path = data.get("file")
@@ -675,7 +681,7 @@ class ServerPlayer:
             time.sleep(3)
             with self._lock:
                 if self._state in ("playing", "paused") and self._last_poll_time > 0:
-                    if time.time() - self._last_poll_time > 5:
+                    if time.time() - self._last_poll_time > 30:
                         self._stop_internal()
                         self._state = "stopped"
 

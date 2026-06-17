@@ -1878,6 +1878,8 @@
     let serverDevices = [];
     let selectedServerDevice = '';
     let serverPollTimer = null;
+    let serverPollFailCount = 0;
+    const SERVER_POLL_MAX_FAIL = 5;
     let sortMode = 'seq';
     let shuffleOrder = [];
     let lyricsAlign = 'left';
@@ -1926,6 +1928,9 @@
         communitySupport: "社区支持",
         sponsorSupport: "赞助支持",
         join: "点击加入",
+        playError: "播放出错，请检查音频文件",
+        bufferStalled: "缓冲卡顿，请稍候…",
+        serverDisconnected: "服务端连接中断，轮询已停止",
       },
       "en-US": {
         appTitle: "Audio Player",
@@ -1970,6 +1975,9 @@
         communitySupport: "Community Support",
         sponsorSupport: "Sponsor Support",
         join: "Join",
+        playError: "Playback error, please check the audio file",
+        bufferStalled: "Buffering stalled, please wait…",
+        serverDisconnected: "Server connection lost, polling stopped",
       }
     };
 
@@ -2203,7 +2211,10 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ file: filePath, sink: selectedServerDevice, position: position || 0 })
       })
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .then(data => {
         if (data.error) {
           showToast(t('serverPlayError') + ': ' + data.error, 'error');
@@ -2226,8 +2237,47 @@
       return null;
     }
 
+    let serverHeartbeatWorker = null;
+
+    function startServerHeartbeatWorker() {
+      stopServerHeartbeatWorker();
+      try {
+        var blob = new Blob([
+          'var timer = null;',
+          'var url = "";',
+          'function heartbeat() {',
+          '  try { fetch(url, { method: "GET", cache: "no-store", headers: { "Cache-Control": "no-cache" } }).catch(function() {}); } catch(e) {}',
+          '}',
+          'self.onmessage = function(e) {',
+          '  if (e.data.cmd === "start") {',
+          '    url = e.data.url;',
+          '    if (timer) clearInterval(timer);',
+          '    heartbeat();',
+          '    timer = setInterval(heartbeat, 5000);',
+          '  } else if (e.data.cmd === "stop") {',
+          '    if (timer) { clearInterval(timer); timer = null; }',
+          '    self.close();',
+          '  }',
+          '};'
+        ], { type: 'application/javascript' });
+        serverHeartbeatWorker = new Worker(URL.createObjectURL(blob));
+        serverHeartbeatWorker.postMessage({ cmd: 'start', url: API_BASE + '/output/keepalive' });
+      } catch (e) {
+        console.error('Failed to start server heartbeat worker:', e);
+      }
+    }
+
+    function stopServerHeartbeatWorker() {
+      if (serverHeartbeatWorker) {
+        try { serverHeartbeatWorker.postMessage({ cmd: 'stop' }); } catch (e) {}
+        try { serverHeartbeatWorker.terminate(); } catch (e) {}
+        serverHeartbeatWorker = null;
+      }
+    }
+
     function startServerPoll() {
       stopServerPoll();
+      serverPollFailCount = 0;
       serverPollTimer = setInterval(pollServerStatus, 1000);
     }
 
@@ -2240,8 +2290,12 @@
 
     function pollServerStatus() {
       fetch(API_BASE + '/output/status')
-        .then(r => r.json())
+        .then(r => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
         .then(status => {
+          serverPollFailCount = 0;
           if (status.state === 'playing') {
             const pos = status.position || 0;
             const dur = status.duration || 0;
@@ -2269,7 +2323,13 @@
             stopServerPoll();
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          serverPollFailCount++;
+          if (serverPollFailCount >= SERVER_POLL_MAX_FAIL) {
+            stopServerPoll();
+            showToast(t('serverDisconnected'), 'error');
+          }
+        });
     }
 
     function loadOutputMode() {
@@ -2290,7 +2350,41 @@
     audioPlayer.addEventListener('loadedmetadata', updateDuration);
     audioPlayer.addEventListener('ended', nextTrack);
     audioPlayer.addEventListener('play', () => { playIcon.innerHTML = PAUSE_ICON; disc.classList.add('spinning'); });
-    audioPlayer.addEventListener('pause', () => { playIcon.innerHTML = PLAY_ICON; disc.classList.remove('spinning'); });
+    audioPlayer.addEventListener('pause', () => {
+      playIcon.innerHTML = PLAY_ICON;
+      disc.classList.remove('spinning');
+    });
+    audioPlayer.addEventListener('error', function () {
+      showToast(t('playError'), 'error');
+    });
+    audioPlayer.addEventListener('stalled', function () {
+      showToast(t('bufferStalled'), 'error');
+    });
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        if (outputMode === 'client' && !audioPlayer.paused) {
+          try { localStorage.setItem('fn-audioplayer-was-playing', 'true'); } catch (e) {}
+        }
+        if (outputMode === 'server' && serverPollTimer) {
+          startServerHeartbeatWorker();
+        }
+      } else {
+        if (outputMode === 'client' && playlist.length > 0 && currentIndex >= 0 && audioPlayer.paused && !audioPlayer.ended) {
+          var wasPlayingBefore = false;
+          try { wasPlayingBefore = localStorage.getItem('fn-audioplayer-was-playing') === 'true'; } catch (e) {}
+          if (wasPlayingBefore) {
+            audioPlayer.play().catch(function () {});
+          }
+        }
+        if (outputMode === 'server') {
+          stopServerHeartbeatWorker();
+          stopServerPoll();
+          startServerPoll();
+        }
+        try { localStorage.removeItem('fn-audioplayer-was-playing'); } catch (e) {}
+      }
+    });
     progressBar.addEventListener('click', seek);
     volumeSlider.addEventListener('input', updateVolume);
     fileInput.addEventListener('change', handleFileSelect);
@@ -2312,7 +2406,10 @@
           showToast(t('pleaseAddAudio'), 'error'); return;
         }
         fetch(API_BASE + '/output/status')
-          .then(r => r.json())
+          .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
           .then(status => {
             if (status.state === 'playing') {
               fetch(API_BASE + '/output/pause', { method: 'POST' }).catch(() => {});
