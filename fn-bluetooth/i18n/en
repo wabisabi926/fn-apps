@@ -1,0 +1,6 @@
+[common]
+display_name="Bluetooth"
+desc="Bluetooth device management tool that supports pairing, connecting audio devices, keyboards, mice, file transfers, and network sharing. Supports both Client mode (scan and connect) and Server mode (accept incoming connections)."
+
+[entry]
+title="Bluetooth"

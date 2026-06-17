@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>蓝牙管理</title>
+  <link rel="stylesheet" href="/app/fn-bluetooth/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <h1 data-i18n="appTitle">蓝牙管理</h1>
+        <p id="statusSummary">正在加载...</p>
+      </div>
+      <div class="row-actions">
+        <div class="role-switch">
+          <button id="roleClientBtn" class="role-btn active" type="button" data-i18n="roleClient">客户端</button>
+          <button id="roleServerBtn" class="role-btn" type="button" data-i18n="roleServer">服务端</button>
+        </div>
+        <button id="refreshBtn" class="ghost-btn" type="button" data-i18n="refresh">刷新</button>
+        <button id="aboutBtn" class="ghost-btn" type="button" data-i18n="about">关于</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- Client Mode -->
+      <div id="clientMode">
+        <section class="panel">
+          <div class="section-head">
+            <h2 data-i18n="adapter">适配器</h2>
+          </div>
+          <div class="adapter-row">
+            <span class="label" data-i18n="bluetooth">蓝牙</span>
+            <div id="powerToggle" class="toggle-switch" role="switch" aria-checked="false" tabindex="0"></div>
+            <span class="label" data-i18n="discoverable">可发现</span>
+            <div id="discoverableToggle" class="toggle-switch" role="switch" aria-checked="false" tabindex="0"></div>
+            <span class="label" data-i18n="pairable">可配对</span>
+            <div id="pairableToggle" class="toggle-switch" role="switch" aria-checked="false" tabindex="0"></div>
+          </div>
+          <div class="stats-grid" style="margin-top:14px">
+            <div class="stat"><span data-i18n="adapterAddr">适配器地址</span><strong id="statAddr">-</strong></div>
+            <div class="stat"><span data-i18n="adapterName">适配器名称</span><strong id="statName">-</strong></div>
+            <div class="stat"><span data-i18n="pairedCount">已配对</span><strong id="statPaired">0</strong></div>
+            <div class="stat"><span data-i18n="connectedCount">已连接</span><strong id="statConnected">0</strong></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <h2 data-i18n="pairedDevices">已配对设备</h2>
+            <span id="pairedCount" class="meta">0</span>
+          </div>
+          <div id="pairedDevices" class="device-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <h2 data-i18n="availableDevices">可用设备</h2>
+            <span id="scanStatus"></span>
+            <button id="scanBtn" class="primary-btn" type="button" disabled data-i18n="scan">扫描设备</button>
+          </div>
+          <div id="availableDevices" class="device-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <h2 data-i18n="audioSettings">音频设置</h2>
+          </div>
+          <div class="grid">
+            <label class="field">
+              <span data-i18n="outputDevice">输出设备</span>
+              <select id="sinkSelect"></select>
+            </label>
+            <label class="field">
+              <span data-i18n="inputDevice">输入设备</span>
+              <select id="sourceSelect"></select>
+            </label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <h2 data-i18n="fileTransfer">文件传输</h2>
+            <button id="sendFileBtn" class="primary-btn" type="button" disabled data-i18n="sendFile">发送文件</button>
+          </div>
+          <div class="grid">
+            <label class="field">
+              <span data-i18n="targetDevice">目标设备</span>
+              <select id="sendTargetSelect"></select>
+            </label>
+            <label class="field">
+              <span data-i18n="filePath">文件路径</span>
+              <input id="sendFilePath" type="text" placeholder="/path/to/file" autocomplete="off">
+            </label>
+          </div>
+          <div id="transferProgress" class="transfer-progress hidden"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <h2 data-i18n="transferHistory">已发送文件</h2>
+            <button id="clearHistoryBtn" class="ghost-btn" type="button" data-i18n="clearAll">清空</button>
+          </div>
+          <div id="transferHistoryList" class="transfer-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <h2 data-i18n="receivedFiles">已接收文件</h2>
+            <button id="clearReceivedBtn" class="ghost-btn" type="button" data-i18n="clearAll">清空</button>
+          </div>
+          <div id="receivedFilesList" class="received-list"></div>
+        </section>
+      </div>
+
+      <!-- Server Mode -->
+      <div id="serverMode" class="hidden">
+        <section class="panel">
+          <div class="section-head">
+            <h2 data-i18n="serverSettings">服务端设置</h2>
+          </div>
+          <div class="adapter-row">
+            <span class="label" data-i18n="bluetooth">蓝牙</span>
+            <div id="serverPowerToggle" class="toggle-switch" role="switch" aria-checked="false" tabindex="0"></div>
+            <span class="label" data-i18n="discoverable">可发现</span>
+            <div id="serverDiscoverableToggle" class="toggle-switch" role="switch" aria-checked="false" tabindex="0"></div>
+            <span class="label" data-i18n="pairable">可配对</span>
+            <div id="serverPairableToggle" class="toggle-switch" role="switch" aria-checked="false" tabindex="0"></div>
+          </div>
+          <div class="grid" style="margin-top:14px">
+            <label class="field">
+              <span data-i18n="serverAlias">设备名称</span>
+              <input id="serverAliasInput" type="text" placeholder="FN-Bluetooth" autocomplete="off">
+            </label>
+            <div class="field">
+              <span data-i18n="adapterAddr">适配器地址</span>
+              <strong id="serverAddr" style="margin-top:6px;display:block">-</strong>
+            </div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+            <button id="serverAdvertiseBtn" class="primary-btn" type="button" data-i18n="startAdvertise">开始广播</button>
+          </div>
+          <div id="obexAgentWarning" class="warning-banner hidden">
+            <span class="warning-icon">⚠</span>
+            <span data-i18n="obexAgentWarning">文件接收服务未就绪，无法接收文件</span>
+            <button id="fixObexAgentBtn" class="ghost-btn" type="button" data-i18n="fixNow">立即修复</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <h2 data-i18n="serverProfiles">服务 Profile</h2>
+          </div>
+          <div id="serverProfilesList" class="profile-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <h2 data-i18n="incomingDevices">已连接设备</h2>
+            <span id="incomingCount" class="meta">0</span>
+          </div>
+          <div id="incomingDevices" class="device-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <h2 data-i18n="tethering">蓝牙共享网络</h2>
+            <div id="tetheringToggle" class="toggle-switch" role="switch" aria-checked="false" tabindex="0"></div>
+          </div>
+          <div class="stats-grid three-col">
+            <div class="stat"><span data-i18n="tetheringBridge">网桥接口</span><strong id="tetherBridge">-</strong></div>
+            <div class="stat"><span data-i18n="tetheringGateway">网关地址</span><input id="tetherBridgeIP" type="text" class="stat-input" value="192.168.7.1" placeholder="192.168.7.1" autocomplete="off"></div>
+            <div class="stat"><span data-i18n="tetheringClients">已连接客户端</span><strong id="tetherClients">0</strong></div>
+          </div>
+          <div id="tetheringClientsList" class="client-list"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <h2 id="modalTitle"></h2>
+      <div id="modalBody"></div>
+      <div class="modal-actions">
+        <button id="modalCancel" class="ghost-btn" type="button" data-i18n="cancel">取消</button>
+        <button id="modalOk" class="primary-btn" type="button" data-i18n="confirm">确定</button>
+      </div>
+    </div>
+  </div>
+  <div id="aboutModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 data-i18n="about">关于</h2>
+        </div>
+        <button class="icon-btn" data-close type="button" aria-label="关闭" data-i18n-title="close">×</button>
+      </div>
+      <div class="about-body">
+        <div class="about-section">
+          <p class="about-declaration" data-i18n="aboutDeclaration">本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。</p>
+        </div>
+
+        <div class="about-section">
+          <h3 data-i18n="communitySupport">社区支持</h3>
+          <ul class="about-list">
+            <li>QQ 群：130359605 · <a href="https://qm.qq.com/q/xMUyJacSIw" target="_blank"
+                rel="noopener noreferrer" data-i18n="join">点击加入</a></li>
+            <li>Github：<a href="https://github.com/RROrg/fn-apps" target="_blank"
+                rel="noopener noreferrer">RROrg/fn-apps</a></li>
+          </ul>
+        </div>
+
+        <div class="about-section">
+          <h3 data-i18n="sponsorSupport">赞助支持</h3>
+          <img class="about-sponsor-image"
+            src="https://fastly.jsdelivr.net/gh/wjz304/wjz304@master/my/buymeacoffee.png" alt="sponsoring">
+        </div>
+
+        <div class="about-copyright">
+          <a href="https://github.com/RROrg" target="_blank" rel="noopener noreferrer">RROrg</a>
+          <a href="https://github.com/wjz304" target="_blank" rel="noopener noreferrer">wjz304</a>
+          <span>© 2026 RROrg, Ing, Inc.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/app/fn-bluetooth/app.js"></script>
+</body>
+</html>
