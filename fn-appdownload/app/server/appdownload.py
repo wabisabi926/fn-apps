@@ -767,11 +767,25 @@ def load_source_json(url):
         return json.loads(response.read().decode("utf-8-sig"))
 
 
-def normalize_third_party_item(app_id, item, source_name, settings=None):
+def _source_base_url(source_url):
+    if not source_url:
+        return ""
+    base = source_url.rsplit("/", 1)[0] if "/" in source_url else ""
+    return base
+
+
+def normalize_third_party_item(app_id, item, source_name, source_url="", settings=None):
     if settings is None:
         settings = read_settings()
     version = str(pick(item, ("version", "versionName"), ""))
     download_path = download_path_for(app_id, version, settings)
+    icon_value = pick(item, ("icon", "icon_url", "iconUrl"), "")
+    download_url_value = pick(item, ("download_url", "downloadUrl", "url"), "")
+    base = _source_base_url(source_url)
+    if not icon_value and base and app_id:
+        icon_value = f"{base}/{app_id}/ICON.PNG"
+    if not download_url_value and base and app_id:
+        download_url_value = f"{base}/{app_id}/{app_id}.fpk"
     return {
         "id": app_id,
         "store": "thirdparty",
@@ -779,9 +793,9 @@ def normalize_third_party_item(app_id, item, source_name, settings=None):
             pick(item, ("display_name", "displayName", "name", "title"), app_id)
         ),
         "version": version,
-        "icon": pick(item, ("icon", "icon_url", "iconUrl"), ""),
+        "icon": icon_value,
         "source": source_name,
-        "downloadUrl": pick(item, ("download_url", "downloadUrl", "url"), ""),
+        "downloadUrl": download_url_value,
         "status": "downloaded" if download_path.exists() else "",
         "downloaded": download_path.exists(),
         "path": str(download_path) if download_path.exists() else "",
@@ -866,7 +880,7 @@ def third_party_apps(official_ids=None, settings=None, token=None):
                 entries = [(str(index), item) for index, item in enumerate(data or [])]
             for app_id, item in entries:
                 if isinstance(item, dict):
-                    apps.append(normalize_third_party_item(str(app_id), item, name, settings=settings))
+                    apps.append(normalize_third_party_item(str(app_id), item, name, source_url=url, settings=settings))
                     version = str(pick(item, ("version", "versionName"), ""))
                     known_keys.add(task_key("thirdparty", str(app_id), version))
         except Exception as exc:
