@@ -1,0 +1,7 @@
+[common]
+display_name="Installer"
+desc="Installer for local FPK application files. Supports right-click installation."
+
+[entry]
+title="Install"
+

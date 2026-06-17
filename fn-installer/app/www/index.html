@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>安装器</title>
+  <link rel="stylesheet" href="/app/fn-installer/style.css">
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 data-i18n="appTitle">📦 应用安装器</h1>
+      <button class="about-btn" id="btnAbout" onclick="openAbout()" data-i18n="about">关于</button>
+    </div>
+
+    <div class="step-indicator" id="stepIndicator">
+      <div class="step-item">
+        <div class="step-circle active" id="stepCircle1">1</div>
+        <span class="step-label active" id="stepLabel1" data-i18n="stepSelect">选择文件</span>
+      </div>
+      <div class="step-connector" id="connector1"></div>
+      <div class="step-item">
+        <div class="step-circle" id="stepCircle2">2</div>
+        <span class="step-label" id="stepLabel2" data-i18n="stepParse">解析安装包</span>
+      </div>
+      <div class="step-connector" id="connector2"></div>
+      <div class="step-item">
+        <div class="step-circle" id="stepCircle3">3</div>
+        <span class="step-label" id="stepLabel3" data-i18n="stepInstall">安装中</span>
+      </div>
+      <div class="step-connector" id="connector3"></div>
+      <div class="step-item">
+        <div class="step-circle" id="stepCircle4">4</div>
+        <span class="step-label" id="stepLabel4" data-i18n="stepDone">完成</span>
+      </div>
+    </div>
+
+    <div id="step1" class="card">
+      <div class="card-title">
+        <span class="icon">📁</span>
+        <span data-i18n="selectPackage">选择安装包</span>
+        <button class="scan-all-btn" onclick="loadFiles()" data-i18n="scanAll">扫描全部</button>
+      </div>
+      <div class="path-input-row">
+        <input type="text" id="customPath" data-i18n-placeholder="pathPlaceholder" placeholder="输入 NAS 目录路径，如 /vol1/docker" />
+        <button class="btn btn-default" onclick="browsePath()" data-i18n="browse">浏览</button>
+      </div>
+      <div id="dirBrowser" class="dir-browser hidden">
+        <div class="dir-breadcrumb" id="dirBreadcrumb"></div>
+        <div id="dirList" class="dir-list"></div>
+      </div>
+      <div id="fileList" class="file-list">
+        <div class="empty-state">
+          <div class="loading-spinner" style="margin:0 auto 12px;display:block;width:32px;height:32px;border-width:3px;"></div>
+          <p data-i18n="scanning">正在扫描 NAS 中的 FPK 文件...</p>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btnNext1" disabled onclick="goToStep2()" data-i18n="nextStep">下一步</button>
+      </div>
+    </div>
+
+    <div id="step2" class="card hidden">
+      <div class="card-title">
+        <span class="icon">📋</span>
+        <span data-i18n="parsePackage">解析安装包</span>
+      </div>
+      <div id="downloadProgress">
+        <div class="progress-text" id="downloadStatusText" data-i18n="parsingPackage">正在解析安装包...</div>
+        <div class="progress-bar-wrapper">
+          <div class="progress-bar" id="downloadProgressBar"></div>
+        </div>
+      </div>
+      <div id="installInfoSection" class="hidden">
+        <div id="updateBanner" class="update-banner hidden"></div>
+        <div class="install-info" id="installInfo"></div>
+        <div id="volumeSection" class="wizard-section hidden">
+          <div class="wizard-title" data-i18n="selectVolume">选择安装卷</div>
+          <div class="wizard-item">
+            <select id="volumeSelect" onchange="state.volumeID=parseInt(this.value)||1"></select>
+          </div>
+        </div>
+        <div id="wizardSection" class="wizard-section hidden"></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-default" id="btnBack2" onclick="goToStep1()" data-i18n="prevStep">上一步</button>
+        <button class="btn btn-primary" id="btnInstall" disabled onclick="goToStep3()" data-i18n="install">安装</button>
+      </div>
+    </div>
+
+    <div id="step3" class="card hidden">
+      <div class="card-title">
+        <span class="icon">⚙️</span>
+        <span data-i18n="installing">安装中</span>
+      </div>
+      <div class="progress-text" id="installStatusText" data-i18n="installingApp">正在安装应用...</div>
+      <div class="progress-bar-wrapper">
+        <div class="progress-bar" id="installProgressBar"></div>
+      </div>
+    </div>
+
+    <div id="step4" class="card hidden">
+      <div id="resultSuccess">
+        <div class="result-icon">✅</div>
+        <div class="result-title" data-i18n="installSuccess">安装成功</div>
+        <div class="result-desc" id="resultSuccessDesc"></div>
+      </div>
+      <div id="resultError" class="hidden">
+        <div class="result-icon">❌</div>
+        <div class="result-title" data-i18n="installFailed">安装失败</div>
+        <div class="result-desc" id="resultErrorDesc"></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="resetWizard()" data-i18n="continueInstall">继续安装</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="aboutModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 data-i18n="about">关于</h2>
+        </div>
+        <button class="icon-btn" onclick="closeAbout()" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="about-body">
+        <div class="about-section">
+          <p class="about-declaration" data-i18n="aboutDeclaration">本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。</p>
+        </div>
+
+        <div class="about-section">
+          <h3 data-i18n="communitySupport">社区支持</h3>
+          <ul class="about-list">
+            <li>QQ 群：130359605 · <a href="https://qm.qq.com/q/xMUyJacSIw" target="_blank"
+                rel="noopener noreferrer" data-i18n="join">点击加入</a></li>
+            <li>Github：<a href="https://github.com/RROrg/fn-apps" target="_blank"
+                rel="noopener noreferrer">RROrg/fn-apps</a></li>
+          </ul>
+        </div>
+
+        <div class="about-section">
+          <h3 data-i18n="sponsorSupport">赞助支持</h3>
+          <img class="about-sponsor-image"
+            src="https://fastly.jsdelivr.net/gh/wjz304/wjz304@master/my/buymeacoffee.png" alt="sponsoring">
+        </div>
+
+        <div class="about-copyright">
+          <a href="https://github.com/RROrg" target="_blank" rel="noopener noreferrer">RROrg</a>
+          <a href="https://github.com/wjz304" target="_blank" rel="noopener noreferrer">wjz304</a>
+          <span>© 2026 RROrg, Ing, Inc.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/app/fn-installer/app.js"></script>
+</body>
+
+</html>

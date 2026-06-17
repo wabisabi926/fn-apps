@@ -1,0 +1,20 @@
+{
+  ".url": {
+    "fn-installer.Application": {
+      "title": "${entry.title}",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "url": "/app/fn-installer",
+      "gatewaySocket": "fn-installer.sock",
+      "gatewayPrefix": "/app/fn-installer",
+      "allUsers": false,
+      "control": {
+        "accessPerm": "readonly",
+        "fullUrlPerm": "readonly"
+      },
+      "fileTypes": [
+        "fpk"
+      ]
+    }
+  }
+}

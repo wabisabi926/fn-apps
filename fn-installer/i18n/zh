@@ -1,0 +1,7 @@
+[common]
+display_name="安装器"
+desc="安装器，用于安装本地 FPK 应用文件。支持右键安装。"
+
+[entry]
+title="安装"
+
