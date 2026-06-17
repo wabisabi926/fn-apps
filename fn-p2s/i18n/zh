@@ -1,0 +1,6 @@
+[common]
+display_name="端口代理"
+desc="通过 fnOS 应用网关路径访问本机端口服务。"
+
+[entry]
+title="端口代理"

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Port Proxy</title>
+  <link rel="stylesheet" href="./style.css?v=20260613c">
+</head>
+
+<body>
+  <div class="app-shell">
+    <main class="content">
+      <section class="table-panel">
+        <div class="filter-bar">
+          <label class="filter-field">
+            <span data-i18n="status">Status</span>
+            <select id="statusSelect">
+              <option value="all" data-i18n="all">All</option>
+              <option value="enabled" data-i18n="enabled">Enabled</option>
+              <option value="disabled" data-i18n="disabled">Disabled</option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span data-i18n="scheme">Scheme</span>
+            <select id="schemeSelect">
+              <option value="all" data-i18n="all">All</option>
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+            </select>
+          </label>
+          <div class="filter-actions">
+            <button id="aboutBtn" class="plain-btn top-btn" type="button" data-i18n="about">About</button>
+            <button id="refreshBtn" class="plain-btn top-btn" type="button" data-i18n="refresh">Refresh</button>
+            <button id="newBtn" class="primary-btn top-btn" type="button" data-i18n="newMapping">New Mapping</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="app-table">
+            <thead>
+              <tr>
+                <th data-i18n="status">Status</th>
+                <th data-i18n="name">Name</th>
+                <th data-i18n="path">Path</th>
+                <th data-i18n="target">Target</th>
+                <th data-i18n="inject">Inject Script</th>
+                <th data-i18n="action">Action</th>
+              </tr>
+            </thead>
+            <tbody id="mappingRows"></tbody>
+          </table>
+          <div id="emptyState" class="empty hidden" data-i18n="empty">No mappings</div>
+        </div>
+
+        <div class="pager-bar">
+          <div id="summary" class="summary"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="editModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="editTitle" data-i18n="newMapping">New Mapping</h2>
+        <button class="icon-btn" data-close type="button" aria-label="Close" data-i18n-title="close">x</button>
+      </div>
+      <form id="mappingForm">
+        <input id="existingSlugInput" type="hidden">
+        <div class="form-grid">
+          <label class="settings-label">
+            <span data-i18n="name">Name</span>
+            <input id="nameInput" type="text" maxlength="80" placeholder="A Service">
+          </label>
+          <label class="settings-label">
+            <span data-i18n="slug">Path Alias</span>
+            <input id="slugInput" type="text" maxlength="64" spellcheck="false" placeholder="a" required>
+          </label>
+          <label class="settings-label">
+            <span data-i18n="scheme">Scheme</span>
+            <select id="formSchemeSelect">
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+            </select>
+          </label>
+          <label class="settings-label">
+            <span data-i18n="host">Host</span>
+            <input id="hostInput" type="text" spellcheck="false" placeholder="127.0.0.1">
+          </label>
+          <label class="settings-label">
+            <span data-i18n="port">Port</span>
+            <input id="portInput" type="number" min="1" max="65535" placeholder="1234" required>
+          </label>
+          <label class="settings-label">
+            <span data-i18n="openMode">Open Mode</span>
+            <select id="openModeSelect">
+              <option value="window" data-i18n="openInWindow">New Window</option>
+              <option value="iframe" data-i18n="openInIframe">Iframe</option>
+            </select>
+          </label>
+          <label class="settings-label switch-line">
+            <span data-i18n="inject">Inject Script</span>
+            <span class="toggle">
+              <input id="injectInput" type="checkbox">
+              <span></span>
+            </span>
+          </label>
+        </div>
+        <label class="settings-label">
+          <span data-i18n="description">Description</span>
+          <input id="descriptionInput" type="text" maxlength="240" placeholder="">
+        </label>
+        <div class="modal-actions">
+          <button id="testBtn" class="plain-btn" type="button" data-i18n="test">Test</button>
+          <span id="testResult" class="test-result"></span>
+          <div class="modal-spacer"></div>
+          <button class="plain-btn" data-close type="button" data-i18n="cancel">Cancel</button>
+          <button class="primary-btn" type="submit" data-i18n="save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="aboutModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 data-i18n="about">About</h2>
+        <button class="icon-btn" data-close type="button" aria-label="Close" data-i18n-title="close">x</button>
+      </div>
+      <div class="about-body">
+        <div class="about-section">
+          <p class="about-declaration" data-i18n="aboutDeclaration">This community-maintained open source project is free and open source, intended only for learning and communication. Please follow local laws and platform terms.</p>
+        </div>
+
+        <div class="about-section">
+          <h3 data-i18n="communitySupport">Community Support</h3>
+          <ul class="about-list">
+            <li>QQ 群：130359605 · <a href="https://qm.qq.com/q/xMUyJacSIw" target="_blank"
+                rel="noopener noreferrer" data-i18n="join">Join</a></li>
+            <li>Github：<a href="https://github.com/RROrg/fn-apps" target="_blank"
+                rel="noopener noreferrer">RROrg/fn-apps</a></li>
+          </ul>
+        </div>
+
+        <div class="about-section">
+          <h3 data-i18n="sponsorSupport">Sponsor Support</h3>
+          <img class="about-sponsor-image"
+            src="https://fastly.jsdelivr.net/gh/wjz304/wjz304@master/my/buymeacoffee.png" alt="sponsoring">
+        </div>
+
+        <div class="about-copyright">
+          <a href="https://github.com/RROrg" target="_blank" rel="noopener noreferrer">RROrg</a>
+          <a href="https://github.com/wjz304" target="_blank" rel="noopener noreferrer">wjz304</a>
+          <span>© 2026 RROrg, Ing, Inc.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="iframeModal" class="modal iframe-modal hidden" role="dialog" aria-modal="true">
+    <div class="iframe-modal-content">
+      <div class="modal-header">
+        <h2 id="iframeTitle">Port Proxy</h2>
+        <button class="icon-btn" data-close type="button" aria-label="Close" data-i18n-title="close">x</button>
+      </div>
+      <iframe id="proxyFrame" title="Port Proxy" referrerpolicy="strict-origin-when-cross-origin"
+        sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"></iframe>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="./app.js?v=20260613c"></script>
+</body>
+
+</html>

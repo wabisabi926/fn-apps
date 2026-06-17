@@ -1,0 +1,6 @@
+[common]
+display_name="Port Proxy"
+desc="Expose local port services through fnOS app gateway paths."
+
+[entry]
+title="Port Proxy"

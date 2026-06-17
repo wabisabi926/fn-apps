@@ -1,0 +1,17 @@
+{
+  ".url": {
+    "fn-p2s.Application": {
+      "title": "${entry.title}",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "url": "/app/p2s",
+      "gatewaySocket": "fn-p2s.sock",
+      "gatewayPrefix": "/app/p2s",
+      "allUsers": false,
+      "control": {
+        "accessPerm": "readonly",
+        "fullUrlPerm": "readonly"
+      }
+    }
+  }
+}
