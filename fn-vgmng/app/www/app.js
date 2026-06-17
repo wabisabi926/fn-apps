@@ -59,6 +59,11 @@ const I18N = {
     fetchFailed: '获取状态失败（HTTP {status}）',
     requestFailed: '请求失败（HTTP {status}）',
     actionFailed: '操作失败',
+    about: '关于',
+    aboutDeclaration: '本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。',
+    communitySupport: '社区支持',
+    sponsorSupport: '赞助支持',
+    join: '点击加入',
   },
   'en-US': {
     appTitle: 'Volume Manager',
@@ -115,6 +120,11 @@ const I18N = {
     fetchFailed: 'Failed to fetch status (HTTP {status})',
     requestFailed: 'Request failed (HTTP {status})',
     actionFailed: 'Action failed',
+    about: 'About',
+    aboutDeclaration: 'This community-maintained open source project is free and open source, intended only for learning and communication. Please follow local laws and platform terms.',
+    communitySupport: 'Community Support',
+    sponsorSupport: 'Sponsor Support',
+    join: 'Join',
   },
 };
 
@@ -1186,6 +1196,22 @@ function bindUiActions() {
       await refreshStatus({ activate: true });
     } catch (error) {
       showToast(error.message, true);
+    }
+  });
+
+  document.getElementById('btnAbout')?.addEventListener('click', () => {
+    document.getElementById('aboutModal')?.classList.remove('hidden');
+  });
+
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-close]')) {
+      const modal = event.target.closest('.modal');
+      if (modal) modal.classList.add('hidden');
+      return;
+    }
+    if (event.target.id === 'aboutModal') {
+      document.getElementById('aboutModal')?.classList.add('hidden');
+      return;
     }
   });
 

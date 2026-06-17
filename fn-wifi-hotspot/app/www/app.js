@@ -54,6 +54,12 @@ const I18N = {
     confirm: "确定",
     cancel: "取消",
     warningTitle: "开启前确认",
+    about: "关于",
+    aboutDeclaration: "本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。",
+    communitySupport: "社区支持",
+    sponsorSupport: "赞助支持",
+    join: "点击加入",
+    close: "关闭",
   },
   "en-US": {
     appTitle: "Wi-Fi Hotspot",
@@ -96,6 +102,12 @@ const I18N = {
     confirm: "OK",
     cancel: "Cancel",
     warningTitle: "Before starting",
+    about: "About",
+    aboutDeclaration: "This community-maintained open source project is free and open source, intended only for learning and communication. Please follow local laws and platform terms.",
+    communitySupport: "Community Support",
+    sponsorSupport: "Sponsor Support",
+    join: "Join",
+    close: "Close",
   },
 };
 
@@ -123,6 +135,8 @@ const els = {
   statUplink: document.getElementById("statUplink"),
   statIp: document.getElementById("statIp"),
   statInternet: document.getElementById("statInternet"),
+  aboutBtn: document.getElementById("btnAbout"),
+  aboutModal: document.getElementById("aboutModal"),
 };
 
 function safeDecode(value) {
@@ -444,6 +458,18 @@ async function toggleHotspot() {
 els.refresh.addEventListener("click", () => loadAll().catch((error) => showToast(error.message, true)));
 els.save.addEventListener("click", () => saveConfig().catch((error) => showToast(error.message, true)));
 els.toggle.addEventListener("click", () => toggleHotspot().catch((error) => showToast(error.message, true)));
+els.aboutBtn.addEventListener("click", () => els.aboutModal.classList.remove("hidden"));
+document.addEventListener("click", (event) => {
+  if (event.target.closest("[data-close]")) {
+    const modal = event.target.closest(".modal");
+    if (modal) modal.classList.add("hidden");
+    return;
+  }
+  if (event.target === els.aboutModal) {
+    els.aboutModal.classList.add("hidden");
+    return;
+  }
+});
 els.form.elements.band.addEventListener("change", () => setOptions(els.channel, channelOptions(), ""));
 els.clients.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-kick]");

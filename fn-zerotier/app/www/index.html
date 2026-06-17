@@ -17,6 +17,7 @@
       </div>
       <div class="hero-actions">
         <button id="refreshBtn" class="btn btn-primary" type="button" data-i18n="refresh">刷新</button>
+        <button id="btnAbout" class="btn" type="button" data-i18n="about">关于</button>
       </div>
     </header>
 
@@ -144,6 +145,38 @@
         </div>
       </section>
     </main>
+
+    <div id="aboutModal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h2 data-i18n="about">关于</h2>
+          </div>
+          <button class="icon-btn" data-close type="button" aria-label="关闭">×</button>
+        </div>
+        <div class="about-body">
+          <div class="about-section">
+            <p class="about-declaration" data-i18n="aboutDeclaration">本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。</p>
+          </div>
+          <div class="about-section">
+            <h3 data-i18n="communitySupport">社区支持</h3>
+            <ul class="about-list">
+              <li>QQ 群：130359605 · <a href="https://qm.qq.com/q/xMUyJacSIw" target="_blank" rel="noopener noreferrer" data-i18n="join">点击加入</a></li>
+              <li>Github：<a href="https://github.com/RROrg/fn-apps" target="_blank" rel="noopener noreferrer">RROrg/fn-apps</a></li>
+            </ul>
+          </div>
+          <div class="about-section">
+            <h3 data-i18n="sponsorSupport">赞助支持</h3>
+            <img class="about-sponsor-image" src="https://fastly.jsdelivr.net/gh/wjz304/wjz304@master/my/buymeacoffee.png" alt="sponsoring">
+          </div>
+          <div class="about-copyright">
+            <a href="https://github.com/RROrg" target="_blank" rel="noopener noreferrer">RROrg</a>
+            <a href="https://github.com/wjz304" target="_blank" rel="noopener noreferrer">wjz304</a>
+            <span>© 2026 RROrg, Ing, Inc.</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div id="toast" class="toast" aria-live="polite"></div>
   </div>

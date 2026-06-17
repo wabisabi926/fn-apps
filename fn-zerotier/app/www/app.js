@@ -116,6 +116,12 @@ const I18N = {
     startedMoon: "已启动 moon {id}",
     stoppedMoon: "已停止 moon {id}",
     removedMoon: "已移除 moon {id}",
+    about: "关于",
+    aboutDeclaration: "本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。",
+    communitySupport: "社区支持",
+    sponsorSupport: "赞助支持",
+    join: "点击加入",
+    close: "关闭",
   },
   "en-US": {
     appTitle: "ZeroTier Console",
@@ -198,6 +204,12 @@ const I18N = {
     startedMoon: "Started moon {id}",
     stoppedMoon: "Stopped moon {id}",
     removedMoon: "Removed moon {id}",
+    about: "About",
+    aboutDeclaration: "This community-maintained open source project is free and open source, intended only for learning and communication. Please follow local laws and platform terms.",
+    communitySupport: "Community Support",
+    sponsorSupport: "Sponsor Support",
+    join: "Join",
+    close: "Close",
   },
 };
 
@@ -825,6 +837,10 @@ async function postAction(action, payload, successMessage) {
 
 refreshBtn.addEventListener("click", () => refreshStatus(true));
 
+document.getElementById("btnAbout").addEventListener("click", () => {
+  document.getElementById("aboutModal").classList.remove("hidden");
+});
+
 joinForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const network = (networkIdInput.value || "").trim();
@@ -888,6 +904,16 @@ moonCreateForm.addEventListener("submit", async (event) => {
 });
 
 document.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-close]")) {
+    const modal = event.target.closest(".modal");
+    if (modal) modal.classList.add("hidden");
+    return;
+  }
+  if (event.target.id === "aboutModal") {
+    document.getElementById("aboutModal").classList.add("hidden");
+    return;
+  }
+
   const button = event.target.closest("button[data-action]");
   if (!button) return;
 
