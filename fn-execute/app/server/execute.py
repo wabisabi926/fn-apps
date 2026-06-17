@@ -74,36 +74,57 @@ def run_script(task_id, file_path, args_str, cwd_str):
             cwd=cwd,
             env={**os.environ, "TERM": "dumb"},
         )
-        stdout, stderr = proc.communicate(timeout=300)
+
+        with EXEC_TASKS_LOCK:
+            if task_id in EXEC_TASKS:
+                EXEC_TASKS[task_id]["proc"] = proc
+
+        def _read_stream(stream, key):
+            try:
+                for raw_line in iter(stream.readline, b""):
+                    line = raw_line.decode("utf-8", errors="replace")
+                    with EXEC_TASKS_LOCK:
+                        if task_id in EXEC_TASKS:
+                            EXEC_TASKS[task_id][key] += line
+            except Exception:
+                pass
+            finally:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+
+        t_out = threading.Thread(target=_read_stream, args=(proc.stdout, "stdout"), daemon=True)
+        t_err = threading.Thread(target=_read_stream, args=(proc.stderr, "stderr"), daemon=True)
+        t_out.start()
+        t_err.start()
+
+        proc.wait(timeout=300)
+        t_out.join(timeout=5)
+        t_err.join(timeout=5)
+
         exit_code = proc.returncode
 
         with EXEC_TASKS_LOCK:
             if task_id in EXEC_TASKS:
                 EXEC_TASKS[task_id]["status"] = "done"
                 EXEC_TASKS[task_id]["exit_code"] = exit_code
-                EXEC_TASKS[task_id]["stdout"] = stdout.decode("utf-8", errors="replace")
-                EXEC_TASKS[task_id]["stderr"] = stderr.decode("utf-8", errors="replace")
                 EXEC_TASKS[task_id]["finished_at"] = datetime.now().isoformat()
     except subprocess.TimeoutExpired:
         proc.kill()
-        stdout, stderr = proc.communicate()
+        proc.wait(timeout=5)
         with EXEC_TASKS_LOCK:
             if task_id in EXEC_TASKS:
                 EXEC_TASKS[task_id]["status"] = "timeout"
                 EXEC_TASKS[task_id]["exit_code"] = -1
-                EXEC_TASKS[task_id]["stdout"] = stdout.decode("utf-8", errors="replace")
-                EXEC_TASKS[task_id]["stderr"] = (
-                    stderr.decode("utf-8", errors="replace")
-                    + "\n[Process killed after 300s timeout]"
-                )
+                EXEC_TASKS[task_id]["stderr"] += "\n[Process killed after 300s timeout]"
                 EXEC_TASKS[task_id]["finished_at"] = datetime.now().isoformat()
     except Exception as exc:
         with EXEC_TASKS_LOCK:
             if task_id in EXEC_TASKS:
                 EXEC_TASKS[task_id]["status"] = "error"
                 EXEC_TASKS[task_id]["exit_code"] = -1
-                EXEC_TASKS[task_id]["stdout"] = ""
-                EXEC_TASKS[task_id]["stderr"] = str(exc)
+                EXEC_TASKS[task_id]["stderr"] += str(exc)
                 EXEC_TASKS[task_id]["finished_at"] = datetime.now().isoformat()
 
 
@@ -289,6 +310,7 @@ class Handler(BaseHTTPRequestHandler):
             "exit_code": None,
             "stdout": "",
             "stderr": "",
+            "proc": None,
             "created_at": datetime.now().isoformat(),
             "started_at": None,
             "finished_at": None,
@@ -320,7 +342,18 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             if action == "stop" and task["status"] == "running":
+                proc = task.get("proc")
+                if proc and proc.poll() is None:
+                    try:
+                        proc.terminate()
+                        proc.wait(timeout=3)
+                    except Exception:
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
                 task["status"] = "killed"
+                task["exit_code"] = -9
                 task["stderr"] += "\n[Process killed by user]"
                 task["finished_at"] = datetime.now().isoformat()
 

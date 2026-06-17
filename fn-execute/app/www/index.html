@@ -433,6 +433,129 @@
       color: var(--danger-text);
     }
 
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(0, 0, 0, 0.58);
+    }
+
+    .modal.hidden { display: none !important; }
+
+    .modal-content {
+      width: min(520px, calc(100vw - 48px));
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .modal-header h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      background: var(--panel-2);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .about-body {
+      display: grid;
+      gap: 12px;
+    }
+
+    .about-section {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--field);
+    }
+
+    .about-section h3 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .about-declaration {
+      margin: 0;
+      line-height: 1.6;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .about-list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .about-list li {
+      color: var(--text);
+      line-height: 1.5;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .about-body a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .about-body a:hover {
+      text-decoration: underline;
+    }
+
+    .about-sponsor-image {
+      width: 100%;
+      max-width: 700px;
+      height: auto;
+      border-radius: 6px;
+    }
+
+    .about-copyright {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 2px 2px 0;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .about-copyright span {
+      color: var(--muted);
+    }
+
     @media (max-width: 640px) {
       .topbar {
         padding: 12px 14px 10px;
@@ -471,6 +594,7 @@
       <div class="topbar-right">
         <button class="primary-btn" id="btnExecute" onclick="doExecute()" data-i18n="execute">执行</button>
         <button class="danger-btn" id="btnStop" onclick="doStop()" disabled data-i18n="stop">终止</button>
+        <button class="ghost-btn" id="btnAbout" onclick="openAbout()" data-i18n="about">关于</button>
       </div>
     </header>
 
@@ -503,6 +627,44 @@
     </div>
   </div>
 
+  <div id="aboutModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 data-i18n="about">关于</h2>
+        </div>
+        <button class="icon-btn" onclick="closeAbout()" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="about-body">
+        <div class="about-section">
+          <p class="about-declaration" data-i18n="aboutDeclaration">本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。</p>
+        </div>
+
+        <div class="about-section">
+          <h3 data-i18n="communitySupport">社区支持</h3>
+          <ul class="about-list">
+            <li>QQ 群：130359605 · <a href="https://qm.qq.com/q/xMUyJacSIw" target="_blank"
+                rel="noopener noreferrer" data-i18n="join">点击加入</a></li>
+            <li>Github：<a href="https://github.com/RROrg/fn-apps" target="_blank"
+                rel="noopener noreferrer">RROrg/fn-apps</a></li>
+          </ul>
+        </div>
+
+        <div class="about-section">
+          <h3 data-i18n="sponsorSupport">赞助支持</h3>
+          <img class="about-sponsor-image"
+            src="https://fastly.jsdelivr.net/gh/wjz304/wjz304@master/my/buymeacoffee.png" alt="sponsoring">
+        </div>
+
+        <div class="about-copyright">
+          <a href="https://github.com/RROrg" target="_blank" rel="noopener noreferrer">RROrg</a>
+          <a href="https://github.com/wjz304" target="_blank" rel="noopener noreferrer">wjz304</a>
+          <span>© 2026 RROrg, Ing, Inc.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast hidden"></div>
 
   <script>
@@ -532,6 +694,12 @@
         statusError: "[错误] 退出码: {code}",
         statusTimeout: "[超时] 退出码: {code}",
         statusKilled: "[已终止] 退出码: {code}",
+        about: "关于",
+        aboutDeclaration: "本项目由社区维护，免费开源，仅用于学习与交流，请遵守所在地法律法规与平台服务条款。",
+        communitySupport: "社区支持",
+        sponsorSupport: "赞助支持",
+        join: "点击加入",
+        close: "关闭",
       },
       "en-US": {
         appTitle: "Execute",
@@ -558,6 +726,12 @@
         statusError: "[Error] Exit code: {code}",
         statusTimeout: "[Timeout] Exit code: {code}",
         statusKilled: "[Killed] Exit code: {code}",
+        about: "About",
+        aboutDeclaration: "This community-maintained open source project is free and open source, intended only for learning and communication. Please follow local laws and platform terms.",
+        communitySupport: "Community Support",
+        sponsorSupport: "Sponsor Support",
+        join: "Join",
+        close: "Close",
       }
     };
 
@@ -775,12 +949,16 @@
           if (data.stdout && data.stdout.length > lastStdoutLen) {
             const newOut = data.stdout.substring(lastStdoutLen);
             lastStdoutLen = data.stdout.length;
-            newOut.split('\n').forEach(line => addLine(line, 'stdout'));
+            const lines = newOut.split('\n');
+            if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+            lines.forEach(line => addLine(line, 'stdout'));
           }
           if (data.stderr && data.stderr.length > lastStderrLen) {
             const newErr = data.stderr.substring(lastStderrLen);
             lastStderrLen = data.stderr.length;
-            newErr.split('\n').forEach(line => addLine(line, 'stderr'));
+            const lines = newErr.split('\n');
+            if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+            lines.forEach(line => addLine(line, 'stderr'));
           }
 
           if (data.status === 'done' || data.status === 'error' || data.status === 'timeout' || data.status === 'killed') {
@@ -825,6 +1003,20 @@
         })
         .catch(() => { });
     }
+
+    function openAbout() {
+      document.getElementById('aboutModal').classList.remove('hidden');
+    }
+
+    function closeAbout() {
+      document.getElementById('aboutModal').classList.add('hidden');
+    }
+
+    document.addEventListener('click', function (e) {
+      if (e.target.id === 'aboutModal') {
+        closeAbout();
+      }
+    });
 
     applyTheme();
     applyI18n();
