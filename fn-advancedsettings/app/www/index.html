@@ -109,8 +109,10 @@
             <h4 data-i18n="cpuExtra">其他项</h4>
             <div class="grid" id="cpuExtraFields"></div>
           </div>
-          <div class="table-wrap">
-            <table class="info-table" id="cpuTable">
+          <div class="info-subsection">
+            <h4 data-i18n="cpuList">CPU 列表</h4>
+            <div class="table-wrap">
+              <table class="info-table" id="cpuTable">
               <thead>
                 <tr>
                   <th data-i18n="cpuName">名称</th>
@@ -125,6 +127,7 @@
               </thead>
               <tbody></tbody>
             </table>
+          </div>
           </div>
         </section>
 
@@ -268,8 +271,39 @@
                 </thead>
                 <tbody></tbody>
               </table>
+            </div>4hang          </div>
+        </section>
+
+        <section id="diagPanel" class="panel hidden" data-panel="diag">
+          <h3 data-i18n="diagSettings">网络诊断</h3>
+          <div class="diag-toolbar">
+            <div class="diag-tabs" id="diagTabs">
+              <button type="button" class="diag-tab active" data-diag="ping">Ping</button>
+              <button type="button" class="diag-tab" data-diag="traceroute">Traceroute</button>
+              <button type="button" class="diag-tab" data-diag="nslookup">Nslookup</button>
+              <button type="button" class="diag-tab" data-diag="arp">ARP</button>
+            </div>
+            <button id="diagRunBtn" class="primary-btn" type="button" data-i18n="diagRun">执行</button>
+          </div>
+          <div id="diagPingForm" class="diag-form">
+            <div class="grid">
+              <label class="field"><span data-i18n="diagTarget">目标地址</span><input id="diagPingTarget" type="text" placeholder="download.liveupdate.fnnas.com" spellcheck="false"></label>
+              <label class="field diag-count-field"><span data-i18n="diagCount">次数</span><input id="diagPingCount" type="number" value="4" min="1" max="20"></label>
             </div>
           </div>
+          <div id="diagTracerouteForm" class="diag-form hidden">
+            <div class="grid">
+              <label class="field wide"><span data-i18n="diagTarget">目标地址</span><input id="diagTracerouteTarget" type="text" placeholder="download.liveupdate.fnnas.com" spellcheck="false"></label>
+            </div>
+          </div>
+          <div id="diagNslookupForm" class="diag-form hidden">
+            <div class="grid">
+              <label class="field"><span data-i18n="diagTarget">目标域名</span><input id="diagNslookupTarget" type="text" placeholder="download.liveupdate.fnnas.com" spellcheck="false"></label>
+              <label class="field"><span data-i18n="diagDnsServer">DNS 服务器</span><input id="diagNslookupServer" type="text" placeholder="8.8.8.8 (可选)" spellcheck="false"></label>
+            </div>
+          </div>
+          <div id="diagArpForm" class="diag-form hidden"></div>
+          <label class="field wide diag-output-field"><span data-i18n="diagOutput">输出</span><textarea id="diagOutput" readonly spellcheck="false" placeholder="" data-i18n-placeholder="diagPlaceholder"></textarea></label>
         </section>
       </form>
     </main>
@@ -298,7 +332,7 @@
 
         <div class="about-section">
           <h3 data-i18n="sponsorSupport">赞助支持</h3>
-          <img class="about-sponsor-image" src="https://raw.githubusercontent.com/wjz304/wjz304/master/my/buymeacoffee.png" alt="sponsoring">
+          <img class="about-sponsor-image" src="https://fastly.jsdelivr.net/gh/wjz304/wjz304@master/my/buymeacoffee.png" alt="sponsoring">
         </div>
 
         <div class="about-copyright">

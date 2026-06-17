@@ -302,6 +302,10 @@ def save_boot(data):
             ["grub-mkconfig", "-o", "/boot/grub/grub.cfg"],
             ["grub2-mkconfig", "-o", "/boot/grub2/grub.cfg"],
         ])
+    if results:
+        errors = [f'{r["cmd"]}: {r["stderr"] or r["stdout"] or "failed"}' for r in results if r.get("rc") != 0]
+        if errors:
+            raise RuntimeError("; ".join(errors))
     return {"boot": read_boot(), "results": results}
 
 
@@ -324,6 +328,10 @@ def save_power(data):
     results = []
     if data.get("apply") and shutil_which("systemctl"):
         results.append(run(["systemctl", "restart", "systemd-logind"], timeout=20))
+    if results:
+        errors = [f'{r["cmd"]}: {r["stderr"] or r["stdout"] or "failed"}' for r in results if r.get("rc") != 0]
+        if errors:
+            raise RuntimeError("; ".join(errors))
     return {"power": read_power(), "results": results}
 
 
@@ -400,6 +408,10 @@ def save_sshd(data):
     write_text(PATHS["sshd"], text)
     if data.get("apply"):
         results.extend(try_run_many(SSH_RESTART_COMMANDS))
+    if results:
+        errors = [f'{r["cmd"]}: {r["stderr"] or r["stdout"] or "failed"}' for r in results if r.get("rc") != 0]
+        if errors:
+            raise RuntimeError("; ".join(errors))
     return {"ssh": read_ssh(), "results": results}
 
 
@@ -1455,6 +1467,10 @@ def save_bridge(data):
     state["bridges"] = bridges
     save_state(state)
     write_network_service(state.get("network", {}), bridges)
+    if results:
+        errors = [f'{r["cmd"]}: {r["stderr"] or r["stdout"] or "failed"}' for r in results if r.get("rc") != 0]
+        if errors:
+            raise RuntimeError("; ".join(errors))
     return {"bridges": read_bridges(), "available_ifaces": [i["name"] for i in list_network()["interfaces"]], "results": results}
 
 
@@ -1529,6 +1545,8 @@ def save_network(data):
     save_state(state)
     write_network_service(network, state.get("bridges"))
     result = run([str(NETWORK_APPLY)], timeout=30)
+    if result.get("rc") != 0:
+        raise RuntimeError(f'{result["cmd"]}: {result["stderr"] or result["stdout"] or "failed"}')
     return {"network": list_network(), "results": [result]}
 
 
@@ -1732,6 +1750,10 @@ def save_identity(data):
     results = []
     if data.get("apply") and shutil_which("systemctl"):
         results.append(run(["systemctl", "restart", "sysinfo_service.service", "trim_main.service"], timeout=30))
+    if results:
+        errors = [f'{r["cmd"]}: {r["stderr"] or r["stdout"] or "failed"}' for r in results if r.get("rc") != 0]
+        if errors:
+            raise RuntimeError("; ".join(errors))
     return {"identity": read_identity(), "results": results}
 
 
@@ -1926,6 +1948,81 @@ def read_port():
     return {"tcp": tcp, "udp": udp}
 
 
+def diag_ping(target, count=4, ipv6=False):
+    cmd = [shutil_which("ping6") or shutil_which("ping")] if ipv6 else [shutil_which("ping") or "ping"]
+    if not shutil_which(cmd[0]):
+        return {"ok": False, "output": "ping not found"}
+    if ipv6 and shutil_which("ping6"):
+        cmd = ["ping6"]
+    elif ipv6:
+        cmd = [shutil_which("ping"), "-6"]
+    cmd += ["-c", str(count), target]
+    result = run(cmd, timeout=count * 5 + 10)
+    return {"ok": result["rc"] == 0, "output": result["stdout"] or result["stderr"]}
+
+
+def diag_traceroute(target, ipv6=False):
+    if shutil_which("traceroute6") and ipv6:
+        cmd = ["traceroute6", target]
+    elif shutil_which("traceroute"):
+        cmd = ["traceroute"]
+        if ipv6:
+            cmd += ["-6"]
+        cmd.append(target)
+    elif shutil_which("tracepath"):
+        cmd = ["tracepath"]
+        if ipv6:
+            cmd += ["-6"]
+        cmd.append(target)
+    else:
+        return {"ok": False, "output": "traceroute / tracepath not found"}
+    result = run(cmd, timeout=60)
+    return {"ok": result["rc"] == 0 or bool(result["stdout"]), "output": result["stdout"] or result["stderr"]}
+
+
+def diag_nslookup(target, server=None, ipv6=False):
+    cmd = [shutil_which("nslookup") or "nslookup"]
+    if not shutil_which(cmd[0]):
+        if shutil_which("dig"):
+            cmd = ["dig"]
+            if ipv6:
+                cmd += ["AAAA"]
+            else:
+                cmd += ["A"]
+            cmd.append(target)
+            if server:
+                cmd += ["@" + server]
+            cmd += ["+noall", "+answer", "+comments"]
+        else:
+            return {"ok": False, "output": "nslookup / dig not found"}
+    else:
+        if server:
+            cmd += [target, server]
+        else:
+            cmd.append(target)
+    result = run(cmd, timeout=15)
+    return {"ok": result["rc"] == 0 or bool(result["stdout"]), "output": result["stdout"] or result["stderr"]}
+
+
+def diag_arp(ipv6=False):
+    if ipv6:
+        if shutil_which("ip"):
+            cmd = ["ip", "-6", "neigh", "show"]
+        elif shutil_which("ndp"):
+            cmd = ["ndp", "-a"]
+        else:
+            return {"ok": False, "output": "ip / ndp not found"}
+    else:
+        if shutil_which("ip"):
+            cmd = ["ip", "neigh", "show"]
+        elif shutil_which("arp"):
+            cmd = ["arp", "-an"]
+        else:
+            return {"ok": False, "output": "ip / arp not found"}
+    result = run(cmd, timeout=10)
+    return {"ok": result["rc"] == 0, "output": result["stdout"] or result["stderr"]}
+
+
 def read_all():
     return {
         "ok": True,
@@ -1943,37 +2040,57 @@ def read_all():
     }
 
 
+def safe_dispatch(fn, body):
+    try:
+        result = fn(body)
+        json_response({"ok": True, **result})
+    except Exception as e:
+        json_response({"ok": False, "message": str(e)})
+
+
 def dispatch():
     body = request_body()
     action = body.get("action") or "read"
     if action == "read":
         json_response(read_all())
     elif action == "saveBoot":
-        json_response({"ok": True, **save_boot(body)})
+        safe_dispatch(save_boot, body)
     elif action == "savePower":
-        json_response({"ok": True, **save_power(body)})
+        safe_dispatch(save_power, body)
     elif action == "saveSsh":
-        json_response({"ok": True, **save_sshd(body)})
+        safe_dispatch(save_sshd, body)
     elif action == "saveCpu":
-        json_response({"ok": True, **save_cpu(body)})
+        safe_dispatch(save_cpu, body)
     elif action == "saveDns":
-        json_response({"ok": True, **save_dns(body)})
+        safe_dispatch(save_dns, body)
     elif action == "saveNetwork":
-        json_response({"ok": True, **save_network(body)})
+        safe_dispatch(save_network, body)
     elif action == "saveBridge":
-        json_response({"ok": True, **save_bridge(body)})
+        safe_dispatch(save_bridge, body)
     elif action == "saveProxy":
-        json_response({"ok": True, **save_proxy(body)})
+        safe_dispatch(save_proxy, body)
     elif action == "saveIdentity":
-        json_response({"ok": True, **save_identity(body)})
+        safe_dispatch(save_identity, body)
     elif action == "readDevice":
         json_response({"ok": True, "device": read_device()})
     elif action == "readPort":
         json_response({"ok": True, "port": read_port()})
     elif action == "saveDisplay":
-        json_response({"ok": True, **save_display(body)})
+        safe_dispatch(save_display, body)
     elif action == "readDisplay":
         json_response({"ok": True, "display": read_display()})
+    elif action == "diagPing":
+        r = diag_ping(body.get("target", ""), int(body.get("count", 4)), body.get("ipv6", False))
+        json_response({"ok": True, "success": r["ok"], "output": r["output"]})
+    elif action == "diagTraceroute":
+        r = diag_traceroute(body.get("target", ""), body.get("ipv6", False))
+        json_response({"ok": True, "success": r["ok"], "output": r["output"]})
+    elif action == "diagNslookup":
+        r = diag_nslookup(body.get("target", ""), body.get("server") or None, body.get("ipv6", False))
+        json_response({"ok": True, "success": r["ok"], "output": r["output"]})
+    elif action == "diagArp":
+        r = diag_arp(body.get("ipv6", False))
+        json_response({"ok": True, "success": r["ok"], "output": r["output"]})
     else:
         json_response({"ok": False, "message": "unsupported action"}, 400)
 

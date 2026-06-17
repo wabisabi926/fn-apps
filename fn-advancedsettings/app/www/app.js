@@ -14,6 +14,7 @@ const sections = [
   ["identity", "identitySettings"],
   ["device", "deviceSettings"],
   ["port", "portSettings"],
+  ["diag", "diagSettings"],
 ];
 
 const icons = {
@@ -28,6 +29,7 @@ const icons = {
   identity: '<svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-5"/></svg>',
   device: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6M9 13h4M9 17h2"/></svg>',
   port: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>',
+  diag: '<svg viewBox="0 0 24 24"><path d="M3 21l4-4M7 17l3-3M10 14l3-6M13 8l4-2M17 6l4-1"/><circle cx="7" cy="17" r="1.5"/><circle cx="17" cy="6" r="1.5"/></svg>',
 };
 
 const powerFields = [
@@ -51,11 +53,21 @@ const kernelParams = [
   ["quiet", "quietDesc"],
   ["splash", "splashDesc"],
   ["nomodeset", "nomodesetDesc"],
+  ["console=ttyS0,115200n8", "consoleTtySDesc"],
+  ["net.ifnames=0", "netIfnames0Desc"],
+  ["panic=5", "panic5Desc"],
+  ["nowatchdog", "nowatchdogDesc"],
   ["pcie_aspm=off", "pcieAspmOffDesc"],
   ["modprobe.blacklist=module", "blacklistDesc"],
   ["iommu=pt", "iommuPtDesc"],
   ["intel_iommu=on", "intelIommuDesc"],
   ["amd_iommu=on", "amdIommuDesc"],
+  ["intremap=off", "intremapOffDesc"],
+  ["amd_iommu_intr=legacy", "amdIommuIntrLegacyDesc"],
+  ["nox2apic", "nox2apicDesc"],
+  ["intel_pstate=disable", "intelPstateDisableDesc"],
+  ["amd_pstate=disable", "amdPstateDisableDesc"],
+  ["split_lock_detect=off", "splitLockDetectOffDesc"],
   ["hugepages=number", "hugepagesDesc"],
   ["transparent_hugepage=never", "thpNeverDesc"],
   ["mitigations=off", "mitigationsOffDesc"],
@@ -93,6 +105,7 @@ const I18N = {
     sshSettings: "SSH 设置",
     cpuSettings: "CPU 设置",
     cpuExtra: "其他项",
+    cpuList: "CPU 列表",
     cpuName: "名称",
     cpuDriver: "驱动",
     currentFreq: "当前频率",
@@ -166,11 +179,21 @@ const I18N = {
     quietDesc: "抑制内核启动时的文本输出，仅显示关键错误",
     splashDesc: "显示启动画面的图形进度条（需配合 plymouth）",
     nomodesetDesc: "禁止内核在启动早期加载图形驱动，使用 VESA 模式",
+    consoleTtySDesc: "将内核控制台输出重定向到串口（ttyS0），波特率 115200，常用于无头服务器和 IPMI",
+    netIfnames0Desc: "禁用可预测网络接口命名，恢复 eth0/eth1 传统命名方式",
+    panic5Desc: "内核恐慌后 5 秒自动重启，提高系统可用性",
+    nowatchdogDesc: "禁用看门狗定时器，减少中断开销",
     pcieAspmOffDesc: "禁用 PCIe 链路电源管理（ASPM），可解决某些设备兼容性问题",
     blacklistDesc: "将指定模块加入黑名单，阻止内核自动加载（如 pcspkr 蜂鸣器）",
     iommuPtDesc: "启用 IOMMU 直通模式，提升设备直通性能（需配合 VT-d/AMD-Vi）",
     intelIommuDesc: "启用 Intel IOMMU（VT-d）支持，用于 PCIe 设备直通",
     amdIommuDesc: "启用 AMD IOMMU（AMD-Vi）支持，用于 PCIe 设备直通",
+    intremapOffDesc: "禁用中断重映射，解决某些硬件上中断分配异常问题",
+    amdIommuIntrLegacyDesc: "AMD IOMMU 使用传统中断模式，兼容旧硬件直通",
+    nox2apicDesc: "禁用 x2APIC，回退到 xAPIC 模式，解决某些平台中断问题",
+    intelPstateDisableDesc: "禁用 Intel P-State 驱动，改用 acpi-cpufreq 频率管理",
+    amdPstateDisableDesc: "禁用 AMD P-State 驱动，改用 acpi-cpufreq 频率管理",
+    splitLockDetectOffDesc: "禁用拆分锁检测，避免跨缓存行原子操作触发 #AC 异常降频",
     hugepagesDesc: "预分配指定数量的 2MB 大页内存，用于数据库或虚拟化优化",
     thpNeverDesc: "禁用透明大页，避免内存分配延迟（适用于数据库等场景）",
     mitigationsOffDesc: "关闭 CPU 安全缓解措施（如 Spectre/Meltdown），提升性能但降低安全性",
@@ -293,6 +316,15 @@ const I18N = {
     windowScaling: "窗口缩放",
     mtuProbing: "MTU 路径探测",
     nicSettings: "网卡设置",
+    diagSettings: "网络诊断",
+    diagTarget: "目标地址",
+    diagCount: "次数",
+    diagDnsServer: "DNS 服务器",
+    diagOutput: "输出",
+    diagRun: "执行",
+    diagRunning: "执行中...",
+    diagPlaceholder: "选择工具并执行诊断",
+    diagNoTarget: "请输入目标地址",
   },
   "en-US": {
     appTitle: "Advanced Settings",
@@ -314,6 +346,7 @@ const I18N = {
     sshSettings: "SSH Settings",
     cpuSettings: "CPU Settings",
     cpuExtra: "Other Options",
+    cpuList: "CPU List",
     cpuName: "Name",
     cpuDriver: "Driver",
     currentFreq: "Current Freq",
@@ -514,6 +547,15 @@ const I18N = {
     windowScaling: "Window Scaling",
     mtuProbing: "MTU Path Probing",
     nicSettings: "NIC Settings",
+    diagSettings: "Network Diagnostics",
+    diagTarget: "Target",
+    diagCount: "Count",
+    diagDnsServer: "DNS Server",
+    diagOutput: "Output",
+    diagRun: "Run",
+    diagRunning: "Running...",
+    diagPlaceholder: "Select a tool and run diagnostics",
+    diagNoTarget: "Please enter a target address",
   },
 };
 
@@ -1039,11 +1081,83 @@ function renderPort() {
   renderPortTable(udp, document.querySelector("#udpTable tbody"), keyword);
 }
 
+let diagActive = "ping";
+let diagRunning = false;
+
+function isIpv6(s) {
+  return /^[0-9a-fA-F:]+$/.test(s) && s.includes(":");
+}
+
+function renderDiag() {
+  document.querySelectorAll("#diagTabs .diag-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.diag === diagActive);
+  });
+  const forms = { ping: "diagPingForm", traceroute: "diagTracerouteForm", nslookup: "diagNslookupForm", arp: "diagArpForm" };
+  Object.entries(forms).forEach(([key, id]) => {
+    document.getElementById(id).classList.toggle("hidden", key !== diagActive);
+  });
+}
+
+function switchDiag(tool) {
+  diagActive = tool;
+  renderDiag();
+}
+
+async function runDiag() {
+  if (diagRunning) return;
+  const output = document.getElementById("diagOutput");
+  let action, data;
+
+  if (diagActive === "ping") {
+    const target = (document.getElementById("diagPingTarget").value || "").trim();
+    if (!target) { showToast(t("diagNoTarget"), true); return; }
+    const count = Math.max(1, Math.min(20, parseInt(document.getElementById("diagPingCount").value) || 4));
+    const ipv6 = isIpv6(target);
+    action = "diagPing";
+    data = { target, count, ipv6 };
+  } else if (diagActive === "traceroute") {
+    const target = (document.getElementById("diagTracerouteTarget").value || "").trim();
+    if (!target) { showToast(t("diagNoTarget"), true); return; }
+    const ipv6 = isIpv6(target);
+    action = "diagTraceroute";
+    data = { target, ipv6 };
+  } else if (diagActive === "nslookup") {
+    const target = (document.getElementById("diagNslookupTarget").value || "").trim();
+    if (!target) { showToast(t("diagNoTarget"), true); return; }
+    const server = (document.getElementById("diagNslookupServer").value || "").trim();
+    const ipv6 = isIpv6(target);
+    action = "diagNslookup";
+    data = { target, server: server || undefined, ipv6 };
+  } else if (diagActive === "arp") {
+    action = "diagArp";
+    data = { ipv6: false };
+  }
+
+  diagRunning = true;
+  const btn = document.getElementById("diagRunBtn");
+  btn.disabled = true;
+  btn.textContent = t("diagRunning");
+  output.value = t("diagRunning");
+  try {
+    const result = await api(action, data);
+    output.value = result.output || "";
+    if (!result.success) output.classList.add("diag-error");
+    else output.classList.remove("diag-error");
+  } catch (e) {
+    output.value = e.message;
+    output.classList.add("diag-error");
+  } finally {
+    diagRunning = false;
+    btn.disabled = false;
+    btn.textContent = t("diagRun");
+  }
+}
+
 function renderPanels() {
   document.querySelectorAll("[data-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.panel !== state.active);
   });
-  document.getElementById("saveBtn").classList.toggle("hidden", state.active === "identity" || state.active === "device" || state.active === "port" || state.active === "display");
+  document.getElementById("saveBtn").classList.toggle("hidden", state.active === "identity" || state.active === "device" || state.active === "port" || state.active === "display" || state.active === "diag");
 }
 
 function render() {
@@ -1060,6 +1174,7 @@ function render() {
   renderIdentity();
   renderDevice();
   renderPort();
+  renderDiag();
 }
 
 async function loadData() {
@@ -1119,6 +1234,8 @@ async function saveActive() {
     state.data = { ...state.data, ...data };
     render();
     showToast(t("saved"));
+  } catch (error) {
+    showToast(error.message, true);
   } finally {
     setSaving(false);
   }
@@ -1133,6 +1250,8 @@ async function saveIdentityFromSwitch() {
     state.data = { ...state.data, ...data };
     render();
     showToast(t("saved"));
+  } catch (error) {
+    showToast(error.message, true);
   } finally {
     setSaving(false);
   }
@@ -1184,6 +1303,12 @@ document.getElementById("networkList").addEventListener("input", (event) => {
 document.getElementById("portSearchInput").addEventListener("input", () => {
   renderPort();
 });
+
+document.getElementById("diagTabs").addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-diag]");
+  if (tab) switchDiag(tab.dataset.diag);
+});
+document.getElementById("diagRunBtn").addEventListener("click", () => runDiag());
 
 async function bridgeAction(action, data = {}) {
   if (state.saving) return;

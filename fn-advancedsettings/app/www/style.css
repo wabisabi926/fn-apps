@@ -267,6 +267,10 @@ button, input, select, textarea { font: inherit; }
   font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
 }
 
+#bootPanel .field textarea {
+  min-height: 96px;
+}
+
 .choice-group {
   display: flex;
   min-height: 36px;
@@ -934,6 +938,80 @@ button, input, select, textarea { font: inherit; }
   font-size: 12px !important;
   height: 26px !important;
   padding: 0 10px !important;
+}
+
+.diag-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.diag-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0;
+}
+
+.diag-tab {
+  padding: 8px 16px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.diag-tab:hover {
+  color: var(--text);
+}
+
+.diag-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.diag-toolbar .primary-btn {
+  flex-shrink: 0;
+}
+
+.diag-form {
+  margin-bottom: 16px;
+}
+
+.diag-form .grid {
+  margin-bottom: 0;
+}
+
+.diag-count-field input[type="number"] {
+  width: 100%;
+}
+
+.diag-output-field {
+  margin-top: 4px;
+}
+
+.diag-output-field textarea {
+  min-height: 260px;
+  resize: vertical;
+  line-height: 1.45;
+  font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.diag-output-field textarea:read-only {
+  background: var(--field);
+  cursor: default;
+}
+
+.diag-error {
+  color: var(--danger-text);
 }
 
 @media (max-width: 860px) {
