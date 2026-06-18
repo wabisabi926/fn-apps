@@ -4,6 +4,7 @@ import base64
 import json
 import mimetypes
 import os
+import shutil
 import signal
 import socketserver
 import subprocess
@@ -37,6 +38,55 @@ def get_audio_env():
                 env["XDG_RUNTIME_DIR"] = d
                 break
     return env
+
+
+def command_exists(name):
+    return shutil.which(name) is not None
+
+
+def run_ok(args, timeout=None, env=None):
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+            env=env,
+        )
+        return result.returncode == 0, result.stdout, result.stderr
+    except FileNotFoundError:
+        return False, "", f"{args[0]} not found"
+    except Exception as exc:
+        return False, "", str(exc)
+
+
+def _pactl_available(audio_env=None):
+    if not command_exists("pactl"):
+        return False
+    ok, _, _ = run_ok(["pactl", "info"], timeout=5, env=audio_env or get_audio_env())
+    return ok
+
+
+def ensure_audio_service():
+    audio_env = get_audio_env()
+    if _pactl_available(audio_env):
+        return True
+    if command_exists("pulseaudio"):
+        run_ok(
+            ["pulseaudio", "--start", "--fail=false", "--log-target=stderr"],
+            timeout=8,
+            env=audio_env,
+        )
+        for _ in range(20):
+            audio_env = get_audio_env()
+            if _pactl_available(audio_env):
+                return True
+            time.sleep(0.2)
+    if command_exists("wpctl"):
+        ok, _, _ = run_ok(["wpctl", "status"], timeout=5, env=audio_env)
+        return ok
+    return False
 
 MIME_TYPES = {
     ".mp3": "audio/mpeg",
@@ -166,8 +216,6 @@ class Handler(BaseHTTPRequestHandler):
             self.handle_output_devices()
         elif path == "/api/output/status":
             self.handle_output_status()
-        elif path == "/api/output/keepalive":
-            self.handle_output_keepalive()
         elif path == "/api/output/play":
             self.handle_output_play()
         elif path == "/api/output/stop":
@@ -233,52 +281,66 @@ class Handler(BaseHTTPRequestHandler):
             ext = os.path.splitext(file_path)[1].lower()
             mime_type = MIME_TYPES.get(ext, "audio/mpeg")
 
-            range_header = self.headers.get("Range", "")
+            if file_size == 0:
+                self.send_response(HTTPStatus.NO_CONTENT)
+                self.send_header("Accept-Ranges", "bytes")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
+            range_header = self.headers.get("Range", "").strip()
+            max_stream_chunk = 1024 * 1024
+            start = 0
+            end = min(file_size - 1, max_stream_chunk - 1)
 
             if range_header:
-                range_value = range_header.replace("bytes=", "")
-                parts = range_value.split("-")
-                start = int(parts[0]) if parts[0] else 0
-                end = int(parts[1]) if parts[1] else file_size - 1
-
-                if start >= file_size or end >= file_size:
+                try:
+                    range_value = range_header.replace("bytes=", "", 1).split(",", 1)[0].strip()
+                    first, _, last = range_value.partition("-")
+                    if first:
+                        start = int(first)
+                        end = int(last) if last else min(file_size - 1, start + max_stream_chunk - 1)
+                    else:
+                        suffix_length = int(last)
+                        if suffix_length <= 0:
+                            raise ValueError("Invalid suffix range")
+                        start = max(0, file_size - suffix_length)
+                        end = file_size - 1
+                except (TypeError, ValueError):
                     self.send_response(416)
                     self.send_header("Content-Range", f"bytes */{file_size}")
+                    self.send_header("Content-Length", "0")
                     self.end_headers()
                     return
 
-                content_length = end - start + 1
-                self.send_response(206)
-                self.send_header("Content-Type", mime_type)
-                self.send_header("Content-Length", str(content_length))
-                self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
-                self.send_header("Accept-Ranges", "bytes")
-                self.send_header("Cache-Control", "public, max-age=3600")
+            if start >= file_size or end < start:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{file_size}")
+                self.send_header("Content-Length", "0")
                 self.end_headers()
-                if self.command != "HEAD":
-                    with open(file_path, "rb") as f:
-                        f.seek(start)
-                        remaining = content_length
-                        while remaining > 0:
-                            chunk = f.read(min(remaining, 65536))
-                            if not chunk:
-                                break
-                            self.wfile.write(chunk)
-                            remaining -= len(chunk)
-            else:
-                self.send_response(200)
-                self.send_header("Content-Type", mime_type)
-                self.send_header("Content-Length", str(file_size))
-                self.send_header("Accept-Ranges", "bytes")
-                self.send_header("Cache-Control", "public, max-age=3600")
-                self.end_headers()
-                if self.command != "HEAD":
-                    with open(file_path, "rb") as f:
-                        while True:
-                            chunk = f.read(65536)
-                            if not chunk:
-                                break
-                            self.wfile.write(chunk)
+                return
+
+            end = min(end, file_size - 1)
+            content_length = end - start + 1
+            self.send_response(206)
+            self.send_header("Content-Type", mime_type)
+            self.send_header("Content-Length", str(content_length))
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            if self.command != "HEAD":
+                with open(file_path, "rb") as f:
+                    f.seek(start)
+                    remaining = content_length
+                    while remaining > 0:
+                        chunk = f.read(min(remaining, 65536))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        remaining -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            return
         except Exception as e:
             self.json_response({"error": str(e)}, 500)
 
@@ -536,10 +598,6 @@ class Handler(BaseHTTPRequestHandler):
         status = server_player.get_status()
         self.json_response(status)
 
-    def handle_output_keepalive(self):
-        server_player.touch_poll()
-        self.json_response({"ok": True})
-
     def handle_output_play(self):
         data = self._parse_json_body()
         file_path = data.get("file")
@@ -681,7 +739,7 @@ class ServerPlayer:
             time.sleep(3)
             with self._lock:
                 if self._state in ("playing", "paused") and self._last_poll_time > 0:
-                    if time.time() - self._last_poll_time > 30:
+                    if time.time() - self._last_poll_time > 5:
                         self._stop_internal()
                         self._state = "stopped"
 
@@ -691,6 +749,7 @@ class ServerPlayer:
 
     def get_devices(self):
         try:
+            ensure_audio_service()
             result = subprocess.run(
                 ["pactl", "list", "sinks"],
                 capture_output=True, text=True, timeout=5,
@@ -723,6 +782,7 @@ class ServerPlayer:
             self._file = file_path
             self._start_offset = position
             self._duration = self._get_duration(file_path)
+            ensure_audio_service()
             env = get_audio_env()
             if sink:
                 env["PULSE_SINK"] = sink
@@ -813,6 +873,7 @@ class ServerPlayer:
         target_sink = sink or self._sink
         if target_sink:
             try:
+                ensure_audio_service()
                 pulse_vol = int(65536 * volume / 100)
                 subprocess.run(
                     ["pactl", "set-sink-volume", target_sink, str(pulse_vol)],

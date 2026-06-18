@@ -1878,11 +1878,13 @@
     let serverDevices = [];
     let selectedServerDevice = '';
     let serverPollTimer = null;
-    let serverPollFailCount = 0;
-    const SERVER_POLL_MAX_FAIL = 5;
     let sortMode = 'seq';
     let shuffleOrder = [];
     let lyricsAlign = 'left';
+    let clientRecoverTimer = null;
+    let clientRecoverAttempts = 0;
+    let clientRecovering = false;
+    let lastClientRecoverAt = 0;
 
     const I18N = {
       "zh-CN": {
@@ -1928,9 +1930,6 @@
         communitySupport: "社区支持",
         sponsorSupport: "赞助支持",
         join: "点击加入",
-        playError: "播放出错，请检查音频文件",
-        bufferStalled: "缓冲卡顿，请稍候…",
-        serverDisconnected: "服务端连接中断，轮询已停止",
       },
       "en-US": {
         appTitle: "Audio Player",
@@ -1975,9 +1974,6 @@
         communitySupport: "Community Support",
         sponsorSupport: "Sponsor Support",
         join: "Join",
-        playError: "Playback error, please check the audio file",
-        bufferStalled: "Buffering stalled, please wait…",
-        serverDisconnected: "Server connection lost, polling stopped",
       }
     };
 
@@ -2147,8 +2143,7 @@
           if (mode === 'server') {
             serverPlay(track.path, position);
           } else {
-            audioPlayer.src = API_BASE + '/audio/stream?file=' + encodeURIComponent(track.path) + '#t=' + Math.floor(position);
-            audioPlayer.play().catch(() => {});
+            setClientTrackSource(track, position, true);
           }
         }
       }
@@ -2211,10 +2206,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ file: filePath, sink: selectedServerDevice, position: position || 0 })
       })
-      .then(r => {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
+      .then(r => r.json())
       .then(data => {
         if (data.error) {
           showToast(t('serverPlayError') + ': ' + data.error, 'error');
@@ -2237,47 +2229,8 @@
       return null;
     }
 
-    let serverHeartbeatWorker = null;
-
-    function startServerHeartbeatWorker() {
-      stopServerHeartbeatWorker();
-      try {
-        var blob = new Blob([
-          'var timer = null;',
-          'var url = "";',
-          'function heartbeat() {',
-          '  try { fetch(url, { method: "GET", cache: "no-store", headers: { "Cache-Control": "no-cache" } }).catch(function() {}); } catch(e) {}',
-          '}',
-          'self.onmessage = function(e) {',
-          '  if (e.data.cmd === "start") {',
-          '    url = e.data.url;',
-          '    if (timer) clearInterval(timer);',
-          '    heartbeat();',
-          '    timer = setInterval(heartbeat, 5000);',
-          '  } else if (e.data.cmd === "stop") {',
-          '    if (timer) { clearInterval(timer); timer = null; }',
-          '    self.close();',
-          '  }',
-          '};'
-        ], { type: 'application/javascript' });
-        serverHeartbeatWorker = new Worker(URL.createObjectURL(blob));
-        serverHeartbeatWorker.postMessage({ cmd: 'start', url: API_BASE + '/output/keepalive' });
-      } catch (e) {
-        console.error('Failed to start server heartbeat worker:', e);
-      }
-    }
-
-    function stopServerHeartbeatWorker() {
-      if (serverHeartbeatWorker) {
-        try { serverHeartbeatWorker.postMessage({ cmd: 'stop' }); } catch (e) {}
-        try { serverHeartbeatWorker.terminate(); } catch (e) {}
-        serverHeartbeatWorker = null;
-      }
-    }
-
     function startServerPoll() {
       stopServerPoll();
-      serverPollFailCount = 0;
       serverPollTimer = setInterval(pollServerStatus, 1000);
     }
 
@@ -2290,12 +2243,8 @@
 
     function pollServerStatus() {
       fetch(API_BASE + '/output/status')
-        .then(r => {
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          return r.json();
-        })
+        .then(r => r.json())
         .then(status => {
-          serverPollFailCount = 0;
           if (status.state === 'playing') {
             const pos = status.position || 0;
             const dur = status.duration || 0;
@@ -2323,13 +2272,7 @@
             stopServerPoll();
           }
         })
-        .catch(() => {
-          serverPollFailCount++;
-          if (serverPollFailCount >= SERVER_POLL_MAX_FAIL) {
-            stopServerPoll();
-            showToast(t('serverDisconnected'), 'error');
-          }
-        });
+        .catch(() => {});
     }
 
     function loadOutputMode() {
@@ -2348,43 +2291,17 @@
     nextBtn.addEventListener('click', nextTrack);
     audioPlayer.addEventListener('timeupdate', updateProgress);
     audioPlayer.addEventListener('loadedmetadata', updateDuration);
-    audioPlayer.addEventListener('ended', nextTrack);
+    audioPlayer.addEventListener('ended', () => { resetClientRecovery(); nextTrack(); });
     audioPlayer.addEventListener('play', () => { playIcon.innerHTML = PAUSE_ICON; disc.classList.add('spinning'); });
     audioPlayer.addEventListener('pause', () => {
-      playIcon.innerHTML = PLAY_ICON;
-      disc.classList.remove('spinning');
-    });
-    audioPlayer.addEventListener('error', function () {
-      showToast(t('playError'), 'error');
-    });
-    audioPlayer.addEventListener('stalled', function () {
-      showToast(t('bufferStalled'), 'error');
-    });
-
-    document.addEventListener('visibilitychange', function () {
-      if (document.hidden) {
-        if (outputMode === 'client' && !audioPlayer.paused) {
-          try { localStorage.setItem('fn-audioplayer-was-playing', 'true'); } catch (e) {}
-        }
-        if (outputMode === 'server' && serverPollTimer) {
-          startServerHeartbeatWorker();
-        }
-      } else {
-        if (outputMode === 'client' && playlist.length > 0 && currentIndex >= 0 && audioPlayer.paused && !audioPlayer.ended) {
-          var wasPlayingBefore = false;
-          try { wasPlayingBefore = localStorage.getItem('fn-audioplayer-was-playing') === 'true'; } catch (e) {}
-          if (wasPlayingBefore) {
-            audioPlayer.play().catch(function () {});
-          }
-        }
-        if (outputMode === 'server') {
-          stopServerHeartbeatWorker();
-          stopServerPoll();
-          startServerPoll();
-        }
-        try { localStorage.removeItem('fn-audioplayer-was-playing'); } catch (e) {}
+      if (!clientRecovering) {
+        playIcon.innerHTML = PLAY_ICON;
+        disc.classList.remove('spinning');
       }
     });
+    audioPlayer.addEventListener('waiting', () => scheduleClientRecovery(3500, false));
+    audioPlayer.addEventListener('stalled', () => scheduleClientRecovery(1200, false));
+    audioPlayer.addEventListener('error', () => scheduleClientRecovery(200, true));
     progressBar.addEventListener('click', seek);
     volumeSlider.addEventListener('input', updateVolume);
     fileInput.addEventListener('change', handleFileSelect);
@@ -2406,10 +2323,7 @@
           showToast(t('pleaseAddAudio'), 'error'); return;
         }
         fetch(API_BASE + '/output/status')
-          .then(r => {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-          })
+          .then(r => r.json())
           .then(status => {
             if (status.state === 'playing') {
               fetch(API_BASE + '/output/pause', { method: 'POST' }).catch(() => {});
@@ -2578,6 +2492,7 @@
 
     function loadTrack(index) {
       if (playlist.length === 0) return;
+      resetClientRecovery();
       currentIndex = index;
       const track = playlist[index];
       trackTitle.textContent = track.title || track.name;
@@ -2592,13 +2507,70 @@
         fetch(API_BASE + '/output/stop', { method: 'POST' }).catch(() => {});
         serverPlay(track.path, 0);
       } else {
-        if (track.isServerFile) {
-          audioPlayer.src = API_BASE + '/audio/stream?file=' + encodeURIComponent(track.path);
-        } else {
-          audioPlayer.src = track.path;
-        }
-        audioPlayer.play().catch(() => {});
+        setClientTrackSource(track, 0, true);
       }
+    }
+
+    function getClientTrackSrc(track, cacheBust) {
+      if (!track.isServerFile) return track.path;
+      let url = API_BASE + '/audio/stream?file=' + encodeURIComponent(track.path);
+      if (cacheBust) url += '&r=' + Date.now();
+      return url;
+    }
+
+    function setClientTrackSource(track, position, autoplay, cacheBust) {
+      audioPlayer.src = getClientTrackSrc(track, cacheBust);
+      if (position > 0) {
+        const seekToPosition = function () {
+          try { audioPlayer.currentTime = Math.max(0, position - 0.25); } catch (e) { }
+          if (autoplay) audioPlayer.play().catch(() => { });
+        };
+        audioPlayer.addEventListener('loadedmetadata', seekToPosition, { once: true });
+        audioPlayer.load();
+      } else if (autoplay) {
+        audioPlayer.play().catch(() => { });
+      }
+    }
+
+    function resetClientRecovery() {
+      if (clientRecoverTimer) {
+        clearTimeout(clientRecoverTimer);
+        clientRecoverTimer = null;
+      }
+      clientRecoverAttempts = 0;
+      clientRecovering = false;
+      lastClientRecoverAt = 0;
+    }
+
+    function scheduleClientRecovery(delay, force) {
+      if (outputMode === 'server' || currentIndex < 0 || currentIndex >= playlist.length) return;
+      const track = playlist[currentIndex];
+      if (!track || !track.isServerFile || (!force && audioPlayer.paused) || audioPlayer.ended) return;
+      const position = audioPlayer.currentTime || 0;
+      const duration = audioPlayer.duration || 0;
+      if (duration > 0 && position >= duration - 1) return;
+      if (clientRecoverAttempts >= 3) return;
+      if (clientRecoverTimer) clearTimeout(clientRecoverTimer);
+      clientRecoverTimer = setTimeout(function () {
+        clientRecoverTimer = null;
+        if ((force || !audioPlayer.paused) && !audioPlayer.ended) {
+          recoverClientPlayback(position);
+        }
+      }, delay);
+    }
+
+    function recoverClientPlayback(position) {
+      if (outputMode === 'server' || currentIndex < 0 || currentIndex >= playlist.length) return;
+      const track = playlist[currentIndex];
+      if (!track || !track.isServerFile) return;
+      clientRecoverAttempts += 1;
+      clientRecovering = true;
+      lastClientRecoverAt = Date.now();
+      const volume = audioPlayer.volume;
+      audioPlayer.pause();
+      audioPlayer.volume = volume;
+      setClientTrackSource(track, position, true, true);
+      setTimeout(function () { clientRecovering = false; }, 1500);
     }
 
     function fetchCover(track) {
@@ -2709,6 +2681,10 @@
 
     function updateProgress() {
       if (outputMode === 'server') return;
+      if (lastClientRecoverAt && Date.now() - lastClientRecoverAt > 10000) {
+        clientRecoverAttempts = 0;
+        lastClientRecoverAt = 0;
+      }
       if (audioPlayer.duration) {
         const percent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
         progressFill.style.width = percent + '%';
