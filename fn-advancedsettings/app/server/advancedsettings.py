@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.parse
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
@@ -22,11 +23,14 @@ DISPLAY_STATE_DIR = BASE_STATE_DIR / "display"
 STATE_FILE = BASE_STATE_DIR / "settings.json"
 NETWORK_APPLY = Path("/usr/local/sbin/fn-advancedsettings-network-apply")
 NETWORK_SERVICE = Path("/etc/systemd/system/fn-advancedsettings-network.service")
+BRIDGE_APPLY = Path("/usr/local/sbin/fn-advancedsettings-bridge-apply")
+BRIDGE_SERVICE = Path("/etc/systemd/system/fn-advancedsettings-bridge.service")
 CPU_APPLY = Path("/usr/local/sbin/fn-advancedsettings-cpu-apply")
 CPU_SERVICE = Path("/etc/systemd/system/fn-advancedsettings-cpu.service")
 DISPLAY_APPLY = Path("/usr/local/sbin/fn-advancedsettings-display-apply")
 DISPLAY_SERVICE = Path("/etc/systemd/system/fn-advancedsettings-display.service")
 TCP_SYSCTL_CONF = Path("/etc/sysctl.d/99-fn-advancedsettings-tcp.conf")
+TCP_MODULES_LOAD = Path("/etc/modules-load.d/fn-advancedsettings-tcp.conf")
 PROXY_PROFILE = Path("/etc/profile.d/fn-advancedsettings-proxy.sh")
 PROXY_APT = Path("/etc/apt/apt.conf.d/99fn-advancedsettings-proxy")
 PROXY_DOCKER_DIR = Path("/etc/systemd/system/docker.service.d")
@@ -48,6 +52,7 @@ PATHS = {
 }
 
 REQUEST_CONTEXT = threading.local()
+TCP_MODULES_PROBED = False
 
 
 class ThreadingUnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
@@ -203,7 +208,7 @@ def try_run_many(commands):
         result = run(cmd)
         results.append(result)
         if result["rc"] == 0:
-            break
+            return [result]
     return results
 
 
@@ -226,6 +231,52 @@ def load_state():
 def save_state(data):
     BASE_STATE_DIR.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def valid_iface_name(name):
+    return bool(name and re.match(r"^[A-Za-z0-9_.:-]+$", str(name)))
+
+
+def valid_bridge_name(name):
+    return bool(name and re.match(r"^[A-Za-z0-9_.:-]+$", str(name)))
+
+
+def clean_iface_name(name):
+    return re.sub(r"[^A-Za-z0-9_.:-]", "", str(name or ""))
+
+
+def normalize_network_state(state):
+    raw = state.get("network", {})
+    network = {}
+    migrated_tcp = {}
+    if isinstance(raw, dict):
+        for name, cfg in raw.items():
+            if name == "tcp" and isinstance(cfg, dict):
+                migrated_tcp.update(cfg)
+                continue
+            if valid_iface_name(name) and isinstance(cfg, dict):
+                network[name] = cfg
+    if migrated_tcp and not isinstance(state.get("tcp"), dict):
+        state["tcp"] = migrated_tcp
+    state["network"] = network
+    return network
+
+
+def normalize_bridge_state(state):
+    raw = state.get("bridges", {})
+    bridges = {}
+    if isinstance(raw, dict):
+        for name, cfg in raw.items():
+            if not valid_bridge_name(name):
+                continue
+            cfg = cfg if isinstance(cfg, dict) else {}
+            members = []
+            for member in cfg.get("members") or []:
+                if valid_iface_name(member) and member not in members:
+                    members.append(member)
+            bridges[name] = {"stp": bool(cfg.get("stp")), "members": members}
+    state["bridges"] = bridges
+    return bridges
 
 
 def parse_kv_file(text, sep="="):
@@ -336,8 +387,15 @@ def save_power(data):
 
 
 SSH_FIELDS = ["PermitRootLogin", "PasswordAuthentication", "PubkeyAuthentication", "PermitEmptyPasswords", "GatewayPorts", "X11Forwarding"]
-SSH_START_COMMANDS = [["systemctl", "start", "sshd"], ["systemctl", "start", "ssh"], ["/etc/init.d/ssh", "start"]]
-SSH_RESTART_COMMANDS = [["systemctl", "restart", "sshd"], ["systemctl", "restart", "ssh"], ["/etc/init.d/ssh", "restart"]]
+SSH_START_COMMANDS = [["systemctl", "start", "ssh"], ["systemctl", "start", "sshd"], ["/etc/init.d/ssh", "start"]]
+SSH_RESTART_COMMANDS = [["systemctl", "restart", "ssh"], ["systemctl", "restart", "sshd"], ["/etc/init.d/ssh", "restart"]]
+
+
+def ensure_sshd_runtime_dir():
+    runtime_dir = Path("/run/sshd")
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    os.chown(runtime_dir, 0, 0)
+    os.chmod(runtime_dir, 0o755)
 
 
 def parse_sshd(text):
@@ -353,6 +411,7 @@ def parse_sshd(text):
 
 
 def ensure_sshd_config():
+    ensure_sshd_runtime_dir()
     if PATHS["sshd"].exists():
         return []
     results = try_run_many(SSH_START_COMMANDS)
@@ -370,6 +429,7 @@ def validate_sshd_content(content):
     sshd = shutil_which("sshd")
     if not sshd:
         return
+    ensure_sshd_runtime_dir()
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
@@ -549,9 +609,7 @@ def read_display():
                     except Exception:
                         pass
         if "drm_force" not in info:
-            for minor_dir in sorted(Path("/sys/kernel/debug/dri").iterdir()):
-                if not minor_dir.name.isdigit():
-                    continue
+            for minor_dir in _drm_debug_dirs():
                 force_path = minor_dir / connector / "force"
                 if force_path.exists():
                     try:
@@ -565,17 +623,26 @@ def read_display():
 
 def _drm_force_connector(name, on):
     connector = name.split("-", 1)[1] if "-" in name else name
-    for minor_dir in sorted(Path("/sys/kernel/debug/dri").iterdir()):
-        if not minor_dir.name.isdigit():
-            continue
+    value = "unspecified" if on else "off"
+    for minor_dir in _drm_debug_dirs():
         force_path = minor_dir / connector / "force"
         if force_path.exists():
             try:
-                force_path.write_text("on" if on else "off", encoding="utf-8")
+                force_path.write_text(value, encoding="utf-8")
                 return True
             except Exception:
                 pass
     return False
+
+
+def _drm_debug_dirs():
+    debug_dir = Path("/sys/kernel/debug/dri")
+    if not debug_dir.exists():
+        return []
+    try:
+        return sorted([p for p in debug_dir.iterdir() if p.is_dir()], key=lambda p: p.name)
+    except Exception:
+        return []
 
 
 def _drm_read_dpms_states():
@@ -856,13 +923,59 @@ def _drm_dpms_control(name, on):
 
 
 def _fbdev_blank(on):
+    any_ok = False
     for fb in sorted(Path("/sys/class/graphics").glob("fb*")):
         blank_path = fb / "blank"
         if blank_path.exists():
             try:
                 blank_path.write_text("0" if on else "3", encoding="utf-8")
+                any_ok = True
             except Exception:
                 pass
+    return any_ok
+
+
+def _backlight_power(on):
+    any_ok = False
+    backlight_dir = Path("/sys/class/backlight")
+    if not backlight_dir.exists():
+        return False
+    for bl in sorted(backlight_dir.iterdir()):
+        bl_power = bl / "bl_power"
+        if bl_power.exists():
+            try:
+                bl_power.write_text("0" if on else "1", encoding="utf-8")
+                any_ok = True
+            except Exception:
+                pass
+    return any_ok
+
+
+def _display_apply_power(name, on, repeat=1, delay=0.35):
+    any_ok = False
+    last_err = None
+    rounds = max(1, int(repeat))
+    for idx in range(rounds):
+        ok, err = _drm_dpms_control(name, on)
+        if ok:
+            any_ok = True
+        elif err:
+            last_err = err
+
+        if on and _drm_force_connector(name, True):
+            any_ok = True
+
+        if _backlight_power(on):
+            any_ok = True
+        if _fbdev_blank(on):
+            any_ok = True
+
+        if not on and not any_ok and _drm_force_connector(name, False):
+            any_ok = True
+
+        if idx < rounds - 1:
+            time.sleep(delay)
+    return any_ok, last_err
 
 
 def save_display(data):
@@ -870,35 +983,20 @@ def save_display(data):
     name = data.get("name")
     if not name:
         raise RuntimeError("display name is required")
+    status_path = Path(f"/sys/class/drm/{name}/status")
+    if not status_path.exists() or read_text(status_path).strip() != "connected":
+        raise RuntimeError("display is not connected")
     target_on = action == "on"
-    any_ok = False
-    last_err = None
-
-    ok, err = _drm_dpms_control(name, target_on)
-    if ok:
-        any_ok = True
-    elif err:
-        last_err = err
-
-    if _drm_force_connector(name, target_on):
-        any_ok = True
-
-    for bl in sorted(Path("/sys/class/backlight").iterdir()):
-        bl_power = bl / "bl_power"
-        if bl_power.exists():
-            try:
-                bl_power.write_text("0" if target_on else "1", encoding="utf-8")
-                any_ok = True
-            except Exception:
-                pass
-
-    _fbdev_blank(target_on)
-
+    if not target_on:
+        _display_set_forced_off(name, True)
+    any_ok, last_err = _display_apply_power(name, target_on, repeat=4 if not target_on else 1)
     if not any_ok and not target_on:
+        _display_set_forced_off(name, False)
         if last_err:
             raise RuntimeError(last_err)
         raise RuntimeError("No available method to control display power (need DRM DPMS, DRM debugfs, backlight, or fbdev)")
-    _display_set_forced_off(name, not target_on)
+    if target_on:
+        _display_set_forced_off(name, False)
     write_display_service()
     return {"display": read_display()}
 
@@ -909,161 +1007,23 @@ def write_display_service():
         for marker in sorted(DISPLAY_STATE_DIR.glob("*.off")):
             off_names.append(marker.stem)
     if off_names:
+        module_path = Path(__file__).resolve()
         script = f"""#!/usr/bin/env python3
-import os, ctypes, ctypes.util, re, sys
+import importlib.util
+import sys
 from pathlib import Path
 
+module_path = Path({repr(str(module_path))})
 state_dir = Path({repr(str(DISPLAY_STATE_DIR))})
 off_names = [p.stem for p in sorted(state_dir.glob('*.off'))]
 if not off_names:
     sys.exit(0)
 
-def try_debugfs_force(conn_name):
-    for minor_dir in sorted(Path('/sys/kernel/debug/dri').iterdir()):
-        if not minor_dir.name.isdigit():
-            continue
-        force_path = minor_dir / conn_name / 'force'
-        if force_path.exists():
-            try:
-                force_path.write_text('off', encoding='utf-8')
-                return True
-            except Exception:
-                pass
-    return False
-
-def try_backlight():
-    for bl in sorted(Path('/sys/class/backlight').iterdir()):
-        bl_power = bl / 'bl_power'
-        if bl_power.exists():
-            try:
-                bl_power.write_text('1', encoding='utf-8')
-            except Exception:
-                pass
-
-def try_fbdev_blank():
-    for fb in sorted(Path('/sys/class/graphics').glob('fb*')):
-        blank_path = fb / 'blank'
-        if blank_path.exists():
-            try:
-                blank_path.write_text('3', encoding='utf-8')
-            except Exception:
-                pass
-
-libdrm_path = ctypes.util.find_library('drm')
-libdrm = None
-if libdrm_path:
-    try:
-        libdrm = ctypes.CDLL(libdrm_path)
-    except OSError:
-        pass
-
+spec = importlib.util.spec_from_file_location('fn_advancedsettings_display', module_path)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
 for name in off_names:
-    card_path = Path(f'/sys/class/drm/{{name}}')
-    try:
-        card_path = card_path.resolve()
-    except Exception:
-        pass
-    card_dev = None
-    minor = None
-    for parent in card_path.parents:
-        if re.match(r'card\\d+$', parent.name) and (parent / 'dev').exists():
-            dev_str = (parent / 'dev').read_text().strip()
-            m = re.match(r'\\d+:(\\d+)', dev_str)
-            if m:
-                minor = int(m.group(1))
-                card_dev = Path(f'/dev/dri/card{{minor}}')
-                break
-    connector_name = name.split('-', 1)[1] if '-' in name else name
-    done = False
-    if not done and card_dev and card_dev.exists() and libdrm:
-        try:
-            fd = os.open(str(card_dev), os.O_RDWR | os.O_CLOEXEC)
-        except OSError:
-            fd = None
-        if fd is not None:
-            try:
-                libdrm.drmSetMaster.restype = ctypes.c_int
-                libdrm.drmSetMaster.argtypes = [ctypes.c_int]
-                is_master = libdrm.drmSetMaster(fd) == 0
-                DRM_MODE_OBJECT_CONNECTOR = 0xc0c0c0c0
-                libdrm.drmModeGetResources.restype = ctypes.c_void_p
-                libdrm.drmModeGetResources.argtypes = [ctypes.c_int]
-                libdrm.drmModeFreeResources.argtypes = [ctypes.c_void_p]
-                libdrm.drmModeObjectGetProperties.restype = ctypes.c_void_p
-                libdrm.drmModeObjectGetProperties.argtypes = [ctypes.c_int, ctypes.c_uint32, ctypes.c_uint32]
-                libdrm.drmModeFreeObjectProperties.argtypes = [ctypes.c_void_p]
-                libdrm.drmModeGetProperty.restype = ctypes.c_void_p
-                libdrm.drmModeGetProperty.argtypes = [ctypes.c_int, ctypes.c_uint32]
-                libdrm.drmModeFreeProperty.argtypes = [ctypes.c_void_p]
-                libdrm.drmModeConnectorSetProperty.restype = ctypes.c_int
-                libdrm.drmModeConnectorSetProperty.argtypes = [ctypes.c_int, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint64]
-                class DrmModeRes(ctypes.Structure):
-                    _fields_ = [('count_fbs', ctypes.c_int), ('fb_id_ptr', ctypes.c_uint64), ('count_crtcs', ctypes.c_int), ('crtc_id_ptr', ctypes.c_uint64), ('count_connectors', ctypes.c_int), ('connector_id_ptr', ctypes.c_uint64), ('count_encoders', ctypes.c_int), ('encoder_id_ptr', ctypes.c_uint64), ('min_width', ctypes.c_uint32), ('max_width', ctypes.c_uint32), ('min_height', ctypes.c_uint32), ('max_height', ctypes.c_uint32)]
-                class DrmModeObjProps(ctypes.Structure):
-                    _fields_ = [('count_props', ctypes.c_int), ('props_ptr', ctypes.c_uint64), ('prop_values_ptr', ctypes.c_uint64)]
-                class DrmModeProp(ctypes.Structure):
-                    _fields_ = [('prop_id', ctypes.c_uint32), ('flags', ctypes.c_uint32), ('name', ctypes.c_char * 32), ('count_values', ctypes.c_int), ('values_ptr', ctypes.c_uint64), ('count_enums', ctypes.c_int), ('enums_ptr', ctypes.c_uint64), ('count_blobs', ctypes.c_int), ('blob_ids_ptr', ctypes.c_uint64)]
-                res_ptr = libdrm.drmModeGetResources(fd)
-                if res_ptr:
-                    try:
-                        res = ctypes.cast(res_ptr, ctypes.POINTER(DrmModeRes)).contents
-                        if res.count_connectors > 0 and res.connector_id_ptr:
-                            conn_ids = list(ctypes.cast(ctypes.c_void_p(res.connector_id_ptr), ctypes.POINTER(ctypes.c_uint32 * res.count_connectors)).contents)
-                            target_dir = Path(f'/sys/class/drm/card{{minor}}-{{connector_name}}')
-                            target_cid = None
-                            cid_file = target_dir / 'connector_id'
-                            if cid_file.exists():
-                                try:
-                                    target_cid = int(cid_file.read_text().strip())
-                                except Exception:
-                                    pass
-                            dpms_prop_id = None
-                            target_conn_id = None
-                            for cid in conn_ids:
-                                if target_cid is not None and cid != target_cid:
-                                    continue
-                                props_ptr = libdrm.drmModeObjectGetProperties(fd, cid, DRM_MODE_OBJECT_CONNECTOR)
-                                if not props_ptr:
-                                    continue
-                                try:
-                                    props = ctypes.cast(props_ptr, ctypes.POINTER(DrmModeObjProps)).contents
-                                    if props.count_props <= 0 or not props.props_ptr:
-                                        continue
-                                    prop_ids = ctypes.cast(ctypes.c_void_p(props.props_ptr), ctypes.POINTER(ctypes.c_uint32 * props.count_props)).contents
-                                    for i in range(props.count_props):
-                                        prop_ptr = libdrm.drmModeGetProperty(fd, prop_ids[i])
-                                        if not prop_ptr:
-                                            continue
-                                        try:
-                                            prop = ctypes.cast(prop_ptr, ctypes.POINTER(DrmModeProp)).contents
-                                            if prop.name.decode('utf-8', errors='replace') == 'DPMS':
-                                                dpms_prop_id = prop_ids[i]
-                                                target_conn_id = cid
-                                                break
-                                        finally:
-                                            libdrm.drmModeFreeProperty(prop_ptr)
-                                    if dpms_prop_id:
-                                        break
-                                finally:
-                                    libdrm.drmModeFreeObjectProperties(props_ptr)
-                            if dpms_prop_id and target_conn_id:
-                                ret = libdrm.drmModeConnectorSetProperty(fd, target_conn_id, dpms_prop_id, 3)
-                                if ret == 0:
-                                    done = True
-                    finally:
-                        libdrm.drmModeFreeResources(res_ptr)
-            finally:
-                try:
-                    libdrm.drmDropMaster.restype = ctypes.c_int
-                    libdrm.drmDropMaster.argtypes = [ctypes.c_int]
-                    libdrm.drmDropMaster(fd)
-                except Exception:
-                    pass
-                os.close(fd)
-    if not done:
-        try_debugfs_force(connector_name)
-    try_backlight()
-    try_fbdev_blank()
+    mod._display_apply_power(name, False, repeat=6, delay=0.5)
 """
         DISPLAY_APPLY.write_text(script, encoding="utf-8")
     else:
@@ -1071,7 +1031,7 @@ for name in off_names:
     os.chmod(DISPLAY_APPLY, 0o755)
     DISPLAY_SERVICE.write_text("""[Unit]
 Description=Apply fn advanced display DPMS settings
-After=sysinit.target
+After=sysinit.target display-manager.service graphical.target
 
 [Service]
 Type=oneshot
@@ -1299,15 +1259,17 @@ def parse_ethtool_link_modes(text, title):
 
 
 def read_tcp():
+    global TCP_MODULES_PROBED
     tcp = {}
     cc_path = Path("/proc/sys/net/ipv4/tcp_congestion_control")
     avail_path = Path("/proc/sys/net/ipv4/tcp_available_congestion_control")
     if cc_path.exists():
         tcp["congestion_control"] = read_text(cc_path).strip()
     if avail_path.exists():
-        for mod in ["tcp_bbr", "tcp_bbr2", "tcp_dctcp", "tcp_cdg", "tcp_nv", "tcp_veno", "tcp_westwood", "tcp_htcp", "tcp_hybla", "tcp_scalable", "tcp_lp", "tcp_yeah", "tcp_illinois"]:
+        for mod in [] if TCP_MODULES_PROBED else ["tcp_bbr", "tcp_bbr2", "tcp_dctcp", "tcp_cdg", "tcp_nv", "tcp_veno", "tcp_westwood", "tcp_htcp", "tcp_hybla", "tcp_scalable", "tcp_lp", "tcp_yeah", "tcp_illinois"]:
             if shutil_which("modprobe"):
                 run(["modprobe", mod], timeout=5)
+        TCP_MODULES_PROBED = True
         tcp["available_congestion_control"] = read_text(avail_path).strip().split()
     fastopen_path = Path("/proc/sys/net/ipv4/tcp_fastopen")
     if fastopen_path.exists():
@@ -1341,6 +1303,12 @@ def read_tcp():
 
 def list_network():
     items = []
+    state = load_state()
+    network = normalize_network_state(state)
+    bridges = normalize_bridge_state(state)
+    saved = dict(network)
+    if isinstance(state.get("tcp"), dict):
+        saved["tcp"] = state["tcp"]
     for iface in sorted(Path("/sys/class/net").iterdir(), key=lambda p: p.name):
         if iface.name == "lo":
             continue
@@ -1358,7 +1326,7 @@ def list_network():
             "supported_wol": ethtool.get("Supports Wake-on") or "",
             "supported_link_modes": ethtool.get("supported_link_modes") or [],
         })
-    return {"interfaces": items, "saved": load_state().get("network", {}), "bridges": read_bridges(), "available_ifaces": [i["name"] for i in items], "tcp": read_tcp()}
+    return {"interfaces": items, "saved": saved, "saved_bridges": bridges, "bridges": read_bridges(), "available_ifaces": [i["name"] for i in items], "tcp": read_tcp()}
 
 
 BRIDGE_PORT_STATES = {0: "disabled", 1: "listening", 2: "learning", 3: "forwarding", 4: "blocking"}
@@ -1404,10 +1372,11 @@ def save_bridge(data):
     results = []
     action = data.get("bridge_action")
     state = load_state()
-    bridges = state.get("bridges", {})
+    normalize_network_state(state)
+    bridges = normalize_bridge_state(state)
     if action == "create":
         name = str(data.get("name") or "").strip()
-        if not name or not re.match(r"^[A-Za-z0-9_.-]+$", name):
+        if not valid_bridge_name(name):
             raise RuntimeError("Invalid bridge name")
         if (Path("/sys/class/net") / name).exists():
             raise RuntimeError(f"Interface {name} already exists")
@@ -1432,7 +1401,7 @@ def save_bridge(data):
     elif action == "add_member":
         name = str(data.get("name") or "").strip()
         member = str(data.get("member") or "").strip()
-        if not name or not member:
+        if not valid_bridge_name(name) or not valid_iface_name(member):
             raise RuntimeError("Bridge name and member are required")
         results.append(run(["ip", "link", "set", member, "master", name], timeout=10))
         if name in bridges:
@@ -1442,7 +1411,7 @@ def save_bridge(data):
     elif action == "remove_member":
         name = str(data.get("name") or "").strip()
         member = str(data.get("member") or "").strip()
-        if not name or not member:
+        if not valid_bridge_name(name) or not valid_iface_name(member):
             raise RuntimeError("Bridge name and member are required")
         results.append(run(["ip", "link", "set", member, "nomaster"], timeout=10))
         if name in bridges:
@@ -1452,7 +1421,7 @@ def save_bridge(data):
     elif action == "update_stp":
         name = str(data.get("name") or "").strip()
         stp = data.get("stp", False)
-        if not name:
+        if not valid_bridge_name(name):
             raise RuntimeError("Bridge name is required")
         stp_path = Path(f"/sys/class/net/{name}/bridge/stp_state")
         if stp_path.exists():
@@ -1466,7 +1435,7 @@ def save_bridge(data):
             bridges[name]["stp"] = bool(stp)
     state["bridges"] = bridges
     save_state(state)
-    write_network_service(state.get("network", {}), bridges)
+    write_bridge_service(bridges)
     if results:
         errors = [f'{r["cmd"]}: {r["stderr"] or r["stdout"] or "failed"}' for r in results if r.get("rc") != 0]
         if errors:
@@ -1474,23 +1443,10 @@ def save_bridge(data):
     return {"bridges": read_bridges(), "available_ifaces": [i["name"] for i in list_network()["interfaces"]], "results": results}
 
 
-def write_network_service(network, bridges=None):
+def write_network_service(network):
     lines = ["#!/bin/sh", "set -eu"]
-    if bridges:
-        for bname, bcfg in sorted(bridges.items()):
-            safe_bname = re.sub(r"[^A-Za-z0-9_.:-]", "", bname)
-            if not safe_bname:
-                continue
-            lines.append(f"ip link add name {safe_bname} type bridge || true")
-            if bcfg.get("stp"):
-                lines.append(f"ip link set {safe_bname} type bridge stp_state 1 || true")
-            lines.append(f"ip link set {safe_bname} up || true")
-            for member in bcfg.get("members") or []:
-                safe_member = re.sub(r"[^A-Za-z0-9_.:-]", "", member)
-                if safe_member:
-                    lines.append(f"ip link set {safe_member} master {safe_bname} || true")
     for iface, cfg in sorted(network.items()):
-        safe_iface = re.sub(r"[^A-Za-z0-9_.:-]", "", iface)
+        safe_iface = clean_iface_name(iface)
         if not safe_iface:
             continue
         if cfg.get("mac"):
@@ -1526,24 +1482,62 @@ WantedBy=multi-user.target
         run(["systemctl", "enable", "fn-advancedsettings-network.service"], timeout=15)
 
 
+def write_bridge_service(bridges):
+    lines = ["#!/bin/sh", "set -eu"]
+    for bname, bcfg in sorted(bridges.items()):
+        safe_bname = clean_iface_name(bname)
+        if not safe_bname:
+            continue
+        lines.append(f"ip link add name {safe_bname} type bridge 2>/dev/null || true")
+        lines.append(f"ip link set {safe_bname} type bridge stp_state {'1' if bcfg.get('stp') else '0'} 2>/dev/null || true")
+        lines.append(f"ip link set {safe_bname} up || true")
+        for member in bcfg.get("members") or []:
+            safe_member = clean_iface_name(member)
+            if safe_member:
+                lines.append(f"ip link set {safe_member} up || true")
+                lines.append(f"ip link set {safe_member} master {safe_bname} || true")
+    BRIDGE_APPLY.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.chmod(BRIDGE_APPLY, 0o755)
+    BRIDGE_SERVICE.write_text("""[Unit]
+Description=Apply fn advanced bridge settings
+After=fn-advancedsettings-network.service network-pre.target
+Before=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fn-advancedsettings-bridge-apply
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+""", encoding="utf-8")
+    if shutil_which("systemctl"):
+        run(["systemctl", "daemon-reload"], timeout=15)
+        run(["systemctl", "enable", "fn-advancedsettings-bridge.service"], timeout=15)
+
+
 def shell_quote(value):
     return "'" + str(value).replace("'", "'\"'\"'") + "'"
 
 
 def save_network(data):
     state = load_state()
-    network = state.get("network", {})
+    network = normalize_network_state(state)
+    normalize_bridge_state(state)
     for item in data.get("interfaces") or []:
         name = item.get("name")
-        if name:
-            network[name] = item
+        if name and valid_iface_name(name):
+            cfg = {k: v for k, v in item.items() if k != "name" and v not in (None, "")}
+            cfg["name"] = name
+            network[name] = cfg
     tcp = data.get("tcp") or {}
     if tcp:
         state["tcp"] = tcp
         apply_tcp(tcp)
     state["network"] = network
     save_state(state)
-    write_network_service(network, state.get("bridges"))
+    write_network_service(network)
+    write_bridge_service(state.get("bridges", {}))
     result = run([str(NETWORK_APPLY)], timeout=30)
     if result.get("rc") != 0:
         raise RuntimeError(f'{result["cmd"]}: {result["stderr"] or result["stdout"] or "failed"}')
@@ -1570,9 +1564,6 @@ TCP_CC_MODULES = {
     "scalable": "tcp_scalable", "lp": "tcp_lp", "yeah": "tcp_yeah",
     "illinois": "tcp_illinois",
 }
-
-TCP_MODULES_LOAD = Path("/etc/modules-load.d/fn-advancedsettings-tcp.conf")
-
 
 def apply_tcp(tcp):
     sysctl_lines = ["# Managed by fn-advancedsettings"]
@@ -1606,36 +1597,79 @@ def apply_tcp(tcp):
 
 def parse_environment_proxy():
     env = parse_kv_file(read_text(PATHS["environment"]))
-    return {key: env.get(key, "") for key in PROXY_KEYS + [key.upper() for key in PROXY_KEYS]}
+    return {key: env.get(key, env.get(key.upper(), "")) for key in PROXY_KEYS}
 
 
-def save_proxy(data):
-    proxy = data.get("proxy") or {}
-    targets = data.get("targets") or {}
-    existing = parse_kv_file(read_text(PATHS["environment"]))
+def normalize_proxy_values(values):
+    proxy = {}
     for key in PROXY_KEYS:
-        value = proxy.get(key, "")
+        value = str(values.get(key) or values.get(key.upper()) or "").strip()
+        if not value:
+            proxy[key] = ""
+            continue
+        if key == "no_proxy":
+            proxy[key] = ",".join([item.strip() for item in re.split(r"[,\s]+", value) if item.strip()])
+            continue
+        parsed = urllib.parse.urlparse(value)
+        if parsed.scheme not in ("http", "https", "socks4", "socks5", "socks5h"):
+            raise RuntimeError(f"{key} must start with http://, https://, socks4://, socks5://, or socks5h://")
+        if not parsed.netloc:
+            raise RuntimeError(f"{key} is missing host")
+        proxy[key] = value
+    return proxy
+
+
+def quote_double(value):
+    return str(value).replace("\\", "\\\\").replace('"', '\\"')
+
+
+def write_environment_proxy(proxy):
+    source = read_text(PATHS["environment"])
+    existing = parse_kv_file(source)
+    for key in PROXY_KEYS:
+        value = proxy.get(key) or ""
         if value:
             existing[key] = value
             existing[key.upper()] = value
         else:
             existing.pop(key, None)
             existing.pop(key.upper(), None)
-    content = "\n".join(f'{key}="{value}"' for key, value in sorted(existing.items())) + "\n"
+    proxy_keys = set(PROXY_KEYS + [key.upper() for key in PROXY_KEYS])
+    kept_lines = []
+    for line in source.splitlines():
+        match = re.match(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=", line)
+        if match and match.group(1) in proxy_keys:
+            continue
+        kept_lines.append(line)
+    proxy_lines = [f'{key}="{quote_double(existing[key])}"' for key in sorted(proxy_keys) if existing.get(key)]
+    lines = kept_lines
+    if lines and proxy_lines and lines[-1].strip():
+        lines.append("")
+    lines.extend(proxy_lines)
+    content = "\n".join(lines).rstrip() + ("\n" if lines else "")
     write_text(PATHS["environment"], content)
+
+
+def save_proxy(data):
+    proxy = normalize_proxy_values(data.get("proxy") or {})
+    targets = data.get("targets") or {}
+    write_environment_proxy(proxy)
     exports = ["# Managed by fn-advancedsettings"]
     for key in PROXY_KEYS:
         if proxy.get(key):
             exports.append(f"export {key}={shell_quote(proxy[key])}")
             exports.append(f"export {key.upper()}={shell_quote(proxy[key])}")
-    PROXY_PROFILE.write_text("\n".join(exports) + "\n", encoding="utf-8")
-    os.chmod(PROXY_PROFILE, 0o644)
+    if len(exports) > 1:
+        PROXY_PROFILE.write_text("\n".join(exports) + "\n", encoding="utf-8")
+        os.chmod(PROXY_PROFILE, 0o644)
+    elif PROXY_PROFILE.exists():
+        PROXY_PROFILE.unlink()
     if targets.get("apt"):
         apt_lines = []
         if proxy.get("http_proxy"):
-            apt_lines.append(f'Acquire::http::Proxy "{proxy["http_proxy"]}";')
+            apt_lines.append(f'Acquire::http::Proxy "{quote_double(proxy["http_proxy"])}";')
         if proxy.get("https_proxy"):
-            apt_lines.append(f'Acquire::https::Proxy "{proxy["https_proxy"]}";')
+            apt_lines.append(f'Acquire::https::Proxy "{quote_double(proxy["https_proxy"])}";')
         if apt_lines:
             PROXY_APT.write_text("\n".join(apt_lines) + "\n", encoding="utf-8")
         elif PROXY_APT.exists():
@@ -1647,14 +1681,14 @@ def save_proxy(data):
         PROXY_DOCKER_DIR.mkdir(parents=True, exist_ok=True)
         docker_lines = ["[Service]"]
         if proxy.get("http_proxy"):
-            docker_lines.append(f'Environment="HTTP_PROXY={proxy["http_proxy"]}"')
-            docker_lines.append(f'Environment="http_proxy={proxy["http_proxy"]}"')
+            docker_lines.append(f'Environment="HTTP_PROXY={quote_double(proxy["http_proxy"])}"')
+            docker_lines.append(f'Environment="http_proxy={quote_double(proxy["http_proxy"])}"')
         if proxy.get("https_proxy"):
-            docker_lines.append(f'Environment="HTTPS_PROXY={proxy["https_proxy"]}"')
-            docker_lines.append(f'Environment="https_proxy={proxy["https_proxy"]}"')
+            docker_lines.append(f'Environment="HTTPS_PROXY={quote_double(proxy["https_proxy"])}"')
+            docker_lines.append(f'Environment="https_proxy={quote_double(proxy["https_proxy"])}"')
         if proxy.get("no_proxy"):
-            docker_lines.append(f'Environment="NO_PROXY={proxy["no_proxy"]}"')
-            docker_lines.append(f'Environment="no_proxy={proxy["no_proxy"]}"')
+            docker_lines.append(f'Environment="NO_PROXY={quote_double(proxy["no_proxy"])}"')
+            docker_lines.append(f'Environment="no_proxy={quote_double(proxy["no_proxy"])}"')
         if len(docker_lines) > 1:
             PROXY_DOCKER_CONF.write_text("\n".join(docker_lines) + "\n", encoding="utf-8")
         elif PROXY_DOCKER_CONF.exists():
@@ -1692,12 +1726,13 @@ def save_proxy(data):
             PROXY_NPM.unlink()
     if targets.get("git"):
         git_lines = ["[http]"]
-        if proxy.get("http_proxy"):
-            git_lines.append(f"\tproxy = {proxy['http_proxy']}")
+        git_proxy = proxy.get("http_proxy") or proxy.get("https_proxy") or proxy.get("socks_proxy") or ""
+        if git_proxy:
+            git_lines.append(f"\tproxy = {git_proxy}")
         if proxy.get("https_proxy"):
             git_lines.append(f"\tsslProxy = {proxy['https_proxy']}")
         if proxy.get("no_proxy"):
-            no_proxy_list = ",".join(f"!{item.strip()}" for item in proxy["no_proxy"].split(",") if item.strip())
+            no_proxy_list = ",".join(item.strip() for item in proxy["no_proxy"].split(",") if item.strip())
             if no_proxy_list:
                 git_lines.append(f"\tnoProxy = {no_proxy_list}")
         if len(git_lines) > 1:

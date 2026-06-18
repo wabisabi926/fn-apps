@@ -891,9 +891,7 @@ function renderDisplay() {
   tbody.innerHTML = displays.length ? displays.map((item) => {
     const isConnected = item.status === "connected";
     const isForcedOff = item.forced_off === true;
-    const statusBadge = isForcedOff
-      ? `<span class="subtle">${escapeHtml(t("displayForcedOff"))}</span>`
-      : isConnected
+    const statusBadge = isConnected
       ? `<span class="badge-driver">${escapeHtml(t("displayConnected"))}</span>`
       : `<span class="subtle">${escapeHtml(t("displayDisconnected"))}</span>`;
     const monitorName = item.monitor_name || item.manufacturer || "-";
@@ -906,11 +904,11 @@ function renderDisplay() {
     const dpmsBadge = isForcedOff
       ? `<span class="subtle">${escapeHtml(t("displayDisabled"))}</span>`
       : dpms === "On" ? `<span class="badge-driver">${escapeHtml(t("displayEnabled"))}</span>` : dpms === "Off" ? `<span class="subtle">${escapeHtml(t("displayDisabled"))}</span>` : escapeHtml(dpms);
-    const powerBtn = isForcedOff
+    const powerBtn = !isConnected
+      ? `<span class="subtle">-</span>`
+      : isForcedOff
       ? `<button type="button" class="ghost-btn display-power-btn" data-display-name="${escapeHtml(item.name)}" data-display-action="on">${escapeHtml(t("displayPowerOn"))}</button>`
-      : isConnected
-      ? `<button type="button" class="ghost-btn display-power-btn" data-display-name="${escapeHtml(item.name)}" data-display-action="off">${escapeHtml(t("displayPowerOff"))}</button>`
-      : `<button type="button" class="ghost-btn display-power-btn" data-display-name="${escapeHtml(item.name)}" data-display-action="on">${escapeHtml(t("displayPowerOn"))}</button>`;
+      : `<button type="button" class="ghost-btn display-power-btn" data-display-name="${escapeHtml(item.name)}" data-display-action="off">${escapeHtml(t("displayPowerOff"))}</button>`;
     return `<tr>
       <td class="mono">${escapeHtml(item.connector)}</td>
       <td>${statusBadge}</td>
