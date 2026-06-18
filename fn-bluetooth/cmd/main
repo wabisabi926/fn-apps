@@ -46,17 +46,15 @@ ensure_audio_services() {
     local audio_env="XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
     if ! env ${audio_env} pactl info >/dev/null 2>&1; then
         if command -v pulseaudio >/dev/null 2>&1; then
-            if ! pgrep -x pulseaudio >/dev/null 2>&1; then
-                log_msg "Starting pulseaudio in user mode ..."
-                if [ ! -f /etc/pulse/default.pa ]; then
-                    cp /etc/pulse/default.pa.dpkg-new /etc/pulse/default.pa 2>/dev/null || true
-                fi
-                if [ ! -f /etc/pulse/daemon.conf ]; then
-                    cp /etc/pulse/daemon.conf.dpkg-new /etc/pulse/daemon.conf 2>/dev/null || true
-                fi
-                env ${audio_env} pulseaudio --start --fail=false >> ${LOG_FILE} 2>&1 || true
-                sleep 1
+            log_msg "Starting pulseaudio in user mode ..."
+            if [ ! -f /etc/pulse/default.pa ]; then
+                cp /etc/pulse/default.pa.dpkg-new /etc/pulse/default.pa 2>/dev/null || true
             fi
+            if [ ! -f /etc/pulse/daemon.conf ]; then
+                cp /etc/pulse/daemon.conf.dpkg-new /etc/pulse/daemon.conf 2>/dev/null || true
+            fi
+            env ${audio_env} pulseaudio --start --fail=false >> ${LOG_FILE} 2>&1 || true
+            sleep 1
         elif command -v pipewire >/dev/null 2>&1; then
             log_msg "Starting pipewire daemon ..."
             env ${audio_env} pipewire >> ${LOG_FILE} 2>&1 &
@@ -105,7 +103,7 @@ start_process() {
     rm -f "${SOCKET_PATH}"
 
     start_services
-    bash -c "${CMD}" >> ${LOG_FILE} 2>&1 &
+    setsid bash -c "${CMD}" >> ${LOG_FILE} 2>&1 &
     # write pid to pidfile
     printf "%s" "$!" > ${PID_FILE}
     # log_msg "CMD = ${CMD}"

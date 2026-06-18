@@ -579,6 +579,38 @@ def get_audio_env():
     return env
 
 
+def _pactl_available(audio_env=None):
+    if not command_exists("pactl"):
+        return False
+    ok, _, _ = run_ok(["pactl", "info"], timeout=5, env_override=audio_env or get_audio_env())
+    return ok
+
+
+def ensure_audio_service():
+    audio_env = get_audio_env()
+    if _pactl_available(audio_env):
+        return True
+    if command_exists("pulseaudio"):
+        run_ok(["pulseaudio", "--start", "--log-target=stderr"], timeout=8, env_override=audio_env)
+        for _ in range(20):
+            audio_env = get_audio_env()
+            if _pactl_available(audio_env):
+                _ensure_audio_discovery()
+                return True
+            time.sleep(0.2)
+    if command_exists("wpctl"):
+        ok, _, _ = run_ok(["wpctl", "status"], timeout=5, env_override=audio_env)
+        return ok
+    return False
+
+
+def _load_pulse_module(module_name, audio_env):
+    ok, stdout, _ = run_ok(["pactl", "list", "short", "modules"], timeout=5, env_override=audio_env)
+    if ok and module_name in stdout:
+        return
+    run_ok(["pactl", "load-module", module_name], timeout=5, env_override=audio_env)
+
+
 def get_audio_devices():
     sinks = []
     sources = []
@@ -1391,7 +1423,10 @@ def btctl_pair_fallback(addr, timeout=30):
 def _ensure_audio_discovery():
     if command_exists("pactl"):
         audio_env = get_audio_env()
-        run_ok(["pactl", "load-module", "module-bluez5-discover"], timeout=5, env_override=audio_env)
+        if _pactl_available(audio_env):
+            _load_pulse_module("module-bluetooth-policy", audio_env)
+            _load_pulse_module("module-bluetooth-discover", audio_env)
+            _load_pulse_module("module-bluez5-discover", audio_env)
 
 
 def _trust_device(addr):
@@ -1808,14 +1843,13 @@ def handle_untrust():
 
 
 def handle_audio_status():
-    audio_available = False
+    audio_available = ensure_audio_service()
     audio_env = get_audio_env()
     if command_exists("pactl"):
-        rc, _, _ = run_ok(["pactl", "info"], timeout=5, env_override=audio_env)
-        audio_available = rc
+        audio_available = _pactl_available(audio_env)
     elif command_exists("wpctl"):
-        rc, _, _ = run_ok(["wpctl", "status"], timeout=5, env_override=audio_env)
-        audio_available = rc
+        ok, _, _ = run_ok(["wpctl", "status"], timeout=5, env_override=audio_env)
+        audio_available = ok
     sinks, sources = get_audio_devices()
     bt_audio = get_connected_audio_bt_devices() if audio_available else []
     default_sink = ""
@@ -1832,13 +1866,13 @@ def handle_audio_connect():
     addr = first_form_value("address")
     if not is_valid_bdaddr(addr):
         error_response("400 Bad Request", "invalid device address")
+    ensure_audio_service()
     dev_path = get_device_path(addr)
     rc, _, _ = dbus_call("org.bluez", dev_path, "org.bluez.Device1", "Connect", timeout=20)
     if rc != 0:
         btctl_exec([f"connect {addr}"], timeout=20)
     time.sleep(1)
-    if command_exists("pactl"):
-        run_ok(["pactl", "load-module", "module-bluez5-discover"], timeout=5)
+    _ensure_audio_discovery()
     ok_response()
 
 
@@ -1857,6 +1891,7 @@ def handle_audio_sink_set():
     sink_name = first_form_value("sink")
     if not sink_name:
         error_response("400 Bad Request", "sink name required")
+    ensure_audio_service()
     audio_env = get_audio_env()
     if command_exists("pactl"):
         sinks_now, _ = get_audio_devices()
@@ -1880,6 +1915,7 @@ def handle_audio_source_set():
     source_name = first_form_value("source")
     if not source_name:
         error_response("400 Bad Request", "source name required")
+    ensure_audio_service()
     audio_env = get_audio_env()
     if command_exists("pactl"):
         _, sources_now = get_audio_devices()
