@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import gzip
 import http.client
 import json
 import mimetypes
@@ -9,8 +10,10 @@ import select
 import signal
 import socket
 import socketserver
+import ssl
 import sys
 import urllib.parse
+import zlib
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
@@ -30,6 +33,16 @@ HOP_BY_HOP_HEADERS = {
     "trailer",
     "transfer-encoding",
     "upgrade",
+}
+STRIPPED_RESPONSE_HEADERS = {
+    "content-security-policy",
+    "content-security-policy-report-only",
+    "cross-origin-embedder-policy",
+    "cross-origin-opener-policy",
+    "cross-origin-resource-policy",
+    "permissions-policy",
+    "x-frame-options",
+    "x-webkit-csp",
 }
 RESERVED_SLUGS = {"", "api", "app.js", "style.css", "index.html"}
 SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
@@ -199,6 +212,7 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+        response_body, decoded = decode_response_body(response_headers, response_body)
         content_type = header_lookup(response_headers, "Content-Type")
         is_html = "text/html" in (content_type or "").lower()
         response_body, content_length = maybe_rewrite_body(self, mapping, rest_path, response_body, content_type)
@@ -206,16 +220,22 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(response.status, response.reason)
         for name, value in response_headers:
             lower = name.lower()
-            if lower in HOP_BY_HOP_HEADERS or lower in {"content-length", "content-encoding"}:
+            if lower in HOP_BY_HOP_HEADERS or lower == "content-length":
+                continue
+            if lower == "content-encoding" and decoded:
+                continue
+            if lower in STRIPPED_RESPONSE_HEADERS:
+                continue
+            if decoded and lower in {"etag", "last-modified"}:
                 continue
             if is_html and lower in {"etag", "last-modified", "cache-control"}:
                 continue
-            if mapping.get("inject") and lower == "content-security-policy" and is_html:
-                continue
             if lower == "location":
                 value = rewrite_location(self, mapping, value)
+            elif lower == "refresh":
+                value = rewrite_refresh(self, mapping, value)
             elif lower == "set-cookie":
-                value = rewrite_cookie_path(self, mapping, value)
+                value = rewrite_cookie(self, mapping, value)
             self.send_header(name, value)
         self.send_header("Content-Length", str(content_length))
         if is_html:
@@ -231,6 +251,9 @@ class Handler(BaseHTTPRequestHandler):
             upstream_path += "?" + query
         try:
             upstream = socket.create_connection((mapping["host"], int(mapping["port"])), timeout=20)
+            if mapping.get("scheme") == "https":
+                context = ssl.create_default_context()
+                upstream = context.wrap_socket(upstream, server_hostname=mapping["host"])
             headers = build_websocket_headers(self, mapping, upstream_path)
             upstream.sendall(headers)
             response = read_until_header_end(upstream)
@@ -493,6 +516,12 @@ def build_upstream_headers(handler, mapping):
         if lower == "accept-encoding":
             headers[name] = "identity"
             continue
+        if lower == "origin":
+            headers[name] = rewrite_request_origin(handler, mapping, value)
+            continue
+        if lower == "referer":
+            headers[name] = rewrite_request_referer(handler, mapping, value)
+            continue
         headers[name] = value
     headers["Host"] = f"{mapping['host']}:{mapping['port']}"
     headers["X-Forwarded-Host"] = handler.headers.get("Host", "")
@@ -529,13 +558,74 @@ def rewrite_location(handler, mapping, value):
     return value
 
 
-def rewrite_cookie_path(handler, mapping, value):
+def rewrite_refresh(handler, mapping, value):
+    if not value:
+        return value
+
+    def replace_url(match):
+        return match.group(1) + rewrite_location(handler, mapping, match.group(2).strip())
+
+    return re.sub(r"(?i)(url\s*=\s*)([^;]+)", replace_url, value, count=1)
+
+
+def rewrite_request_origin(handler, mapping, value):
+    if not value:
+        return value
+    try:
+        parsed = urlsplit(value)
+        local_host = (handler.headers.get("Host") or "").lower()
+        if parsed.netloc.lower() == local_host:
+            return upstream_origin(mapping)
+    except Exception:
+        pass
+    return value
+
+
+def rewrite_request_referer(handler, mapping, value):
+    if not value:
+        return value
+    try:
+        parsed = urlsplit(value)
+        local_host = (handler.headers.get("Host") or "").lower()
+        prefix = local_prefix(handler, mapping)
+        if parsed.netloc.lower() == local_host and parsed.path.startswith(prefix):
+            path = parsed.path[len(prefix):] or "/"
+            return upstream_origin(mapping) + path + (("?" + parsed.query) if parsed.query else "")
+    except Exception:
+        pass
+    return value
+
+
+def rewrite_cookie(handler, mapping, value):
     prefix = local_prefix(handler, mapping)
-    return re.sub(r"(?i)(;\s*path=)/", r"\1" + prefix + "/", value)
+    rewritten = re.sub(r"(?i)(;\s*path=)/", r"\1" + prefix + "/", value)
+    rewritten = re.sub(r"(?i);\s*domain=[^;]*", "", rewritten)
+    return rewritten
+
+
+def decode_response_body(headers, body):
+    encoding = (header_lookup(headers, "Content-Encoding") or "").lower().strip()
+    if not body or not encoding or encoding in {"identity", "none"}:
+        return body, False
+    try:
+        if encoding == "gzip":
+            return gzip.decompress(body), True
+        if encoding == "deflate":
+            try:
+                return zlib.decompress(body), True
+            except zlib.error:
+                return zlib.decompress(body, -zlib.MAX_WBITS), True
+    except Exception:
+        return body, False
+    return body, False
 
 
 CSS_URL_PATTERN = re.compile(
     r'(?P<prefix>url\(\s*["\']?)(?P<value>[^)"\']+)(?P<suffix>["\']?\s*\))',
+    re.IGNORECASE,
+)
+CSS_IMPORT_PATTERN = re.compile(
+    r'(?P<prefix>@import\s+(?:url\(\s*)?["\']?)(?P<value>[^)"\';]+)(?P<suffix>["\']?\s*\)?)(?P<tail>[^;]*;)',
     re.IGNORECASE,
 )
 
@@ -553,18 +643,30 @@ def rewrite_css_body(handler, mapping, rest_path, body):
     prefix = local_prefix(handler, mapping)
     css_url = prefix + rest_path
 
+    def rewrite_css_url(value):
+        value = value.strip()
+        if not value or value.startswith(("data:", "javascript:", "mailto:", "#", "http://", "https://", "//")):
+            return value
+        if value.startswith("/"):
+            return prefix + value
+        return urllib.parse.urljoin(css_url, value)
+
     def rewrite_url(match):
         value = match.group("value").strip()
-        if not value or value.startswith(("data:", "javascript:", "mailto:", "#", "http://", "https://", "//")):
+        new_value = rewrite_css_url(value)
+        if new_value == value:
             return match.group(0)
-        if value.startswith("/"):
-            new_value = prefix + value
-        else:
-            resolved = urllib.parse.urljoin(css_url, value)
-            new_value = resolved
         return match.group("prefix") + new_value + match.group("suffix")
 
+    def rewrite_import(match):
+        value = match.group("value").strip()
+        new_value = rewrite_css_url(value)
+        if new_value == value:
+            return match.group(0)
+        return match.group("prefix") + new_value + match.group("suffix") + match.group("tail")
+
     text = CSS_URL_PATTERN.sub(rewrite_url, text)
+    text = CSS_IMPORT_PATTERN.sub(rewrite_import, text)
     next_body = text.encode(encoding)
     return next_body, len(next_body)
 
@@ -613,7 +715,10 @@ def remove_html_csp_meta(text):
 
 
 HTML_ATTR_PATTERN = re.compile(
-    r'(?is)(<(?:script|link|img|iframe|source|video|audio|embed|object|form|a|area|base)\b[^>]*?\b(?:src|href|action|data|poster|srcset)\s*=\s*)(["\'])(/[^"\']*?)\2',
+    r'(?is)(<(?:script|link|img|iframe|source|video|audio|embed|object|form|a|area|base)\b[^>]*?\b(?P<attr>srcset|src|href|action|data|poster)\s*=\s*)(["\'])(/[^"\']*?)\3',
+)
+HTML_SRCSET_PATTERN = re.compile(
+    r'(?is)(\bsrcset\s*=\s*)(["\'])(/[^"\']*?)\2',
 )
 
 
@@ -622,13 +727,34 @@ def rewrite_html_urls(text, handler, mapping):
 
     def replace_attr(match):
         before = match.group(1)
-        quote = match.group(2)
-        path = match.group(3)
+        attr = match.group("attr").lower()
+        quote = match.group(3)
+        path = match.group(4)
         if path.startswith(prefix + "/") or path.startswith(prefix):
             return match.group(0)
+        if attr == "srcset":
+            return before + quote + rewrite_srcset(prefix, path) + quote
         return before + quote + prefix + path + quote
 
-    return HTML_ATTR_PATTERN.sub(replace_attr, text)
+    text = HTML_ATTR_PATTERN.sub(replace_attr, text)
+
+    def replace_srcset(match):
+        value = match.group(3)
+        if value.startswith(prefix + "/") or value.startswith(prefix):
+            return match.group(0)
+        return match.group(1) + match.group(2) + rewrite_srcset(prefix, value) + match.group(2)
+
+    return HTML_SRCSET_PATTERN.sub(replace_srcset, text)
+
+
+def rewrite_srcset(prefix, value):
+    parts = []
+    for candidate in str(value).split(","):
+        chunks = candidate.strip().split()
+        if chunks and chunks[0].startswith("/") and not chunks[0].startswith(prefix + "/"):
+            chunks[0] = prefix + chunks[0]
+        parts.append(" ".join(chunks))
+    return ", ".join(parts)
 
 
 def rewrite_html_head(text, handler, mapping):
