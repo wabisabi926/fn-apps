@@ -23,7 +23,7 @@ setup_links() {
   # user    存放用户文件、第三方软件包、自动安装脚本等文件。
   #
 
-  for d in data user; do
+  for d in data; do
     mkdir -p "${SHARE_PATH}/${d}" >/dev/null 2>&1 || true
     if [ "$(realpath "${SHARE_PATH}/${d}")" != "$(realpath "${IVENTOY_DIR}/${d}")" ]; then
       mv -f "${IVENTOY_DIR:?}/${d}"/. "${SHARE_PATH}/${d}"/ 2>/dev/null || true
@@ -36,13 +36,25 @@ setup_links() {
   done
 
   for d in iso; do
-    mkdir -p "${wizard_iso_path:-"${SHARE_PATH}/iso"}" >/dev/null 2>&1 || true
-    if [ "$(realpath "${wizard_iso_path:-"${SHARE_PATH}/iso"}")" != "$(realpath "${IVENTOY_DIR}/${d}")" ]; then
-      mv -f "${IVENTOY_DIR:?}/${d}"/. "${wizard_iso_path:-"${SHARE_PATH}/iso"}"/ 2>/dev/null || true
+    mkdir -p "${wizard_iso_path:-"${SHARE_PATH}/${d}"}" >/dev/null 2>&1 || true
+    if [ "$(realpath "${wizard_iso_path:-"${SHARE_PATH}/${d}"}")" != "$(realpath "${IVENTOY_DIR}/${d}")" ]; then
+      mv -f "${IVENTOY_DIR:?}/${d}"/. "${wizard_iso_path:-"${SHARE_PATH}/${d}"}"/ 2>/dev/null || true
       rm -rf "${IVENTOY_DIR:?}/${d}"
-      ln -snf "${wizard_iso_path:-"${SHARE_PATH}/iso"}" "${IVENTOY_DIR}/${d}"
-      if [ -z "$(ls -A "${wizard_iso_path:-"${SHARE_PATH}/iso"}" 2>/dev/null)" ] && [ -n "$(ls -A "${IVENTOY_DIR}/${d}.orig" 2>/dev/null)" ]; then
-        cp -rf "${IVENTOY_DIR}/${d}.orig"/. "${wizard_iso_path:-"${SHARE_PATH}/iso"}"/ 2>/dev/null || true
+      ln -snf "${wizard_iso_path:-"${SHARE_PATH}/${d}"}" "${IVENTOY_DIR}/${d}"
+      if [ -z "$(ls -A "${wizard_iso_path:-"${SHARE_PATH}/${d}"}" 2>/dev/null)" ] && [ -n "$(ls -A "${IVENTOY_DIR}/${d}.orig" 2>/dev/null)" ]; then
+        cp -rf "${IVENTOY_DIR}/${d}.orig"/. "${wizard_iso_path:-"${SHARE_PATH}/${d}"}"/ 2>/dev/null || true
+      fi
+    fi
+  done
+
+  for d in user; do
+    mkdir -p "${wizard_user_path:-"${SHARE_PATH}/${d}"}" >/dev/null 2>&1 || true
+    if [ "$(realpath "${wizard_user_path:-"${SHARE_PATH}/${d}"}")" != "$(realpath "${IVENTOY_DIR}/${d}")" ]; then
+      mv -f "${IVENTOY_DIR:?}/${d}"/. "${wizard_user_path:-"${SHARE_PATH}/${d}"}"/ 2>/dev/null || true
+      rm -rf "${IVENTOY_DIR:?}/${d}"
+      ln -snf "${wizard_user_path:-"${SHARE_PATH}/${d}"}" "${IVENTOY_DIR}/${d}"
+      if [ -z "$(ls -A "${wizard_user_path:-"${SHARE_PATH}/${d}"}" 2>/dev/null)" ] && [ -n "$(ls -A "${IVENTOY_DIR}/${d}.orig" 2>/dev/null)" ]; then
+        cp -rf "${IVENTOY_DIR}/${d}.orig"/. "${wizard_user_path:-"${SHARE_PATH}/${d}"}"/ 2>/dev/null || true
       fi
     fi
   done

@@ -21,6 +21,22 @@
             "message": "${wizard.config_item1_rules}"
           }
         ]
+      },
+      {
+        "type": "text",
+        "field": "wizard_user_path",
+        "label": "${wizard.config_item2_label}",
+        "initValue": "",
+        "rules": [
+          {
+            "required": false,
+            "message": "${wizard.config_item2_required}"
+          },
+          {
+            "pattern": "^\\/vol([\\w]+\\/?)+$",
+            "message": "${wizard.config_item2_rules}"
+          }
+        ]
       }
     ]
   }

@@ -21,6 +21,22 @@
             "message": "${wizard.install_item1_rules}"
           }
         ]
+      },
+      {
+        "type": "text",
+        "field": "wizard_user_path",
+        "label": "${wizard.install_item2_label}",
+        "initValue": "",
+        "rules": [
+          {
+            "required": false,
+            "message": "${wizard.install_item2_required}"
+          },
+          {
+            "pattern": "^\\/vol([\\w]+\\/?)+$",
+            "message": "${wizard.install_item2_rules}"
+          }
+        ]
       }
     ]
   }
