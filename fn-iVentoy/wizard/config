@@ -1,0 +1,27 @@
+[
+  {
+    "stepTitle": "${wizard.config_stepTitle}",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "${wizard.config_item1_helpText}"
+      },
+      {
+        "type": "text",
+        "field": "wizard_iso_path",
+        "label": "${wizard.config_item1_label}",
+        "initValue": "",
+        "rules": [
+          {
+            "required": false,
+            "message": "${wizard.config_item1_required}"
+          },
+          {
+            "pattern": "^\\/vol([\\w]+\\/?)+$",
+            "message": "${wizard.config_item1_rules}"
+          }
+        ]
+      }
+    ]
+  }
+]

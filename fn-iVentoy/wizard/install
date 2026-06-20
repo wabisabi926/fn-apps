@@ -1,0 +1,27 @@
+[
+  {
+    "stepTitle": "${wizard.install_stepTitle}",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "${wizard.install_item1_helpText}"
+      },
+      {
+        "type": "text",
+        "field": "wizard_iso_path",
+        "label": "${wizard.install_item1_label}",
+        "initValue": "",
+        "rules": [
+          {
+            "required": false,
+            "message": "${wizard.install_item1_required}"
+          },
+          {
+            "pattern": "^\\/vol([\\w]+\\/?)+$",
+            "message": "${wizard.install_item1_rules}"
+          }
+        ]
+      }
+    ]
+  }
+]

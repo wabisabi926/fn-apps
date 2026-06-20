@@ -1,0 +1,26 @@
+[common]
+display_name="iVentoy"
+desc="iVentoy - PXE 启动服务器，支持通过局域网网络安装操作系统。"
+
+[entry]
+title="iVentoy"
+
+[wizard]
+config_stepTitle="配置向导"
+config_item1_helpText="您即将修改 iVentoy" 
+install_item1_label="请输入 iso 文件保存位置（空：使用应用共享位置）"
+install_item1_required="请输入 iso 文件保存位置（空：使用应用共享位置）"
+install_item1_rules="路径格式不正确，请输入绝对路径（例如：/vol1/share/iventoy/iso）"
+
+install_stepTitle="安装向导"
+install_item1_helpText="您即将安装 iVentoy" 
+install_item1_label="请输入 iso 文件保存位置（空：使用应用共享位置）"
+install_item1_required="请输入 iso 文件保存位置（空：使用应用共享位置）"
+install_item1_rules="路径格式不正确，请输入存储池的路径（例如：/vol1/share/iventoy/iso）"
+
+uninstall_stepTitle="卸载向导"
+uninstall_item1_helpText="您即将卸载此应用。请选择如何处理应用数据："
+uninstall_item1_label="数据保留选项"
+uninstall_item1_options1="保留数据 - 重安装时可恢复！（推荐）"
+uninstall_item1_options2="删除数据 - 此操作不可恢复！"
+uninstall_item1_rules="请选择数据保留选项"
