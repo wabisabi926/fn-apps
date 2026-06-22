@@ -14,14 +14,14 @@ fi
 ARCH="$(uname -m)"
 case "${ARCH}" in
   "aarch64")
-    FNNAS="https://www.fnnas.com/download-arm"
-    CODE_BASE="/usr/share/AAVMF/AAVMF_CODE.fd"
-    VARS_BASE="/usr/share/AAVMF/AAVMF_VARS.fd"
-    ;;
-  "x86_64")
     FNNAS="https://www.fnnas.com/download?key=fnos"
     CODE_BASE="/usr/share/OVMF/OVMF_CODE.fd"
     VARS_BASE="/usr/share/OVMF/OVMF_VARS.fd"
+    ;;
+  "x86_64")
+    FNNAS="https://www.fnnas.com/download-arm"
+    CODE_BASE="/usr/share/AAVMF/AAVMF_CODE.fd"
+    VARS_BASE="/usr/share/AAVMF/AAVMF_VARS.fd"
     ;;
   *)
     echo "Unsupported architecture: ${ARCH}." >$TRIM_TEMP_LOGFILE
@@ -84,6 +84,86 @@ case "${ARCH}" in
   <currentMemory unit='MiB'>${wizard_memory:-4096}</currentMemory>
   <vcpu placement='static'>${wizard_vcpu:-2}</vcpu>
   <os>
+    <type arch='x86_64' machine='pc-q35-7.2'>hvm</type>
+    <loader readonly='yes' type='pflash'>${CODE_PATH}</loader>
+    <nvram>${VARS_PATH}</nvram>
+    <boot dev='hd'/>
+    <boot dev='cdrom'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+    <pae/>
+  </features>
+  <cpu mode='custom' match='exact'>
+    <model fallback='allow'>x86-64-v1</model>
+  </cpu>
+  <qemu:commandline>
+    <qemu:arg value='-accel'/>
+    <qemu:arg value='tcg,thread=multi'/>
+  </qemu:commandline>
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+
+    <controller type='scsi' model='virtio-scsi'/>
+    <controller type='virtio-serial' index='0'/>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='${DISK_PATH}'/>
+      <target dev='sda' bus='scsi'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='${ISO_PATH}'/>
+      <target dev='sdb' bus='scsi'/>
+      <readonly/>
+    </disk>
+    <interface type='bridge'>
+      <source bridge='${OVS_BRIDGE}'/>
+      <virtualport type='openvswitch'/>
+      <model type='virtio'/>
+    </interface>
+    <controller type='usb' model='qemu-xhci'/>
+    <input type='tablet' bus='usb'/>
+    <input type='keyboard' bus='usb'/>
+    <video>
+      <model type='virtio' heads='1' primary='yes'/>
+    </video>
+    <audio id='1' type='none'/>
+    <sound model='ich9'>
+      <audio id='1'/>
+    </sound>
+    <graphics type='vnc' socket='/var/run/vms/fn-vfnOS.vnc.sock' powerControl='yes'>
+      <listen type='socket' socket='/var/run/vms/fn-vfnOS.vnc.sock'/>
+    </graphics>
+    <channel type='unix'>
+      <target type='virtio' name='org.qemu.guest_agent.0'/>
+    </channel>
+    <channel type='qemu-vdagent'>
+      <source>
+        <clipboard copypaste='yes'/>
+      </source>
+      <target type='virtio' name='com.redhat.spice.0'/>
+    </channel>
+    <console type='pty'/>
+  </devices>
+</domain>
+EOF
+    ;;
+  "x86_64")
+    cat >"${SHARE_PATH}/fn-vfnOS.xml" <<EOF
+<domain type='qemu'>
+  <name>fn-vfnOS</name>
+  <title>fn-vfnOS</title>
+  ${UUID_XML}
+  <memory unit='MiB'>${wizard_memory:-4096}</memory>
+  <currentMemory unit='MiB'>${wizard_memory:-4096}</currentMemory>
+  <vcpu placement='static'>${wizard_vcpu:-2}</vcpu>
+  <os>
     <type arch='aarch64' machine='virt-7.2'>hvm</type>
     <loader readonly='yes' type='pflash'>${CODE_PATH}</loader>
     <nvram>${VARS_PATH}</nvram>
@@ -133,86 +213,6 @@ case "${ARCH}" in
     </video>
     <video>
       <model type='virtio' heads='1' primary='no'/>
-    </video>
-    <audio id='1' type='none'/>
-    <sound model='ich9'>
-      <audio id='1'/>
-    </sound>
-    <graphics type='vnc' socket='/var/run/vms/fn-vfnOS.vnc.sock' powerControl='yes'>
-      <listen type='socket' socket='/var/run/vms/fn-vfnOS.vnc.sock'/>
-    </graphics>
-    <channel type='unix'>
-      <target type='virtio' name='org.qemu.guest_agent.0'/>
-    </channel>
-    <channel type='qemu-vdagent'>
-      <source>
-        <clipboard copypaste='yes'/>
-      </source>
-      <target type='virtio' name='com.redhat.spice.0'/>
-    </channel>
-    <console type='pty'/>
-  </devices>
-</domain>
-EOF
-    ;;
-  "x86_64")
-    cat >"${SHARE_PATH}/fn-vfnOS.xml" <<EOF
-<domain type='qemu'>
-  <name>fn-vfnOS</name>
-  <title>fn-vfnOS</title>
-  ${UUID_XML}
-  <memory unit='MiB'>${wizard_memory:-4096}</memory>
-  <currentMemory unit='MiB'>${wizard_memory:-4096}</currentMemory>
-  <vcpu placement='static'>${wizard_vcpu:-2}</vcpu>
-  <os>
-    <type arch='x86_64' machine='pc-q35-7.2'>hvm</type>
-    <loader readonly='yes' type='pflash'>${CODE_PATH}</loader>
-    <nvram>${VARS_PATH}</nvram>
-    <boot dev='hd'/>
-    <boot dev='cdrom'/>
-  </os>
-  <features>
-    <acpi/>
-    <apic/>
-    <pae/>
-  </features>
-  <cpu mode='custom' match='exact'>
-    <model fallback='allow'>x86-64-v1</model>
-  </cpu>
-  <qemu:commandline>
-    <qemu:arg value='-accel'/>
-    <qemu:arg value='tcg,thread=multi'/>
-  </qemu:commandline>
-  <clock offset='utc'/>
-  <on_poweroff>destroy</on_poweroff>
-  <on_reboot>restart</on_reboot>
-  <on_crash>destroy</on_crash>
-  <devices>
-    <emulator>/usr/bin/qemu-system-x86_64</emulator>
-
-    <controller type='scsi' model='virtio-scsi'/>
-    <controller type='virtio-serial' index='0'/>
-    <disk type='file' device='disk'>
-      <driver name='qemu' type='qcow2'/>
-      <source file='${DISK_PATH}'/>
-      <target dev='sda' bus='scsi'/>
-    </disk>
-    <disk type='file' device='cdrom'>
-      <driver name='qemu' type='raw'/>
-      <source file='${ISO_PATH}'/>
-      <target dev='sdb' bus='scsi'/>
-      <readonly/>
-    </disk>
-    <interface type='bridge'>
-      <source bridge='${OVS_BRIDGE}'/>
-      <virtualport type='openvswitch'/>
-      <model type='virtio'/>
-    </interface>
-    <controller type='usb' model='qemu-xhci'/>
-    <input type='tablet' bus='usb'/>
-    <input type='keyboard' bus='usb'/>
-    <video>
-      <model type='virtio' heads='1' primary='yes'/>
     </video>
     <audio id='1' type='none'/>
     <sound model='ich9'>
