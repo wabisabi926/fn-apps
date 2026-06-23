@@ -603,7 +603,11 @@ def _find_installed_app(app_name):
             continue
         name = str(app.get("appName", "") or app.get("name", "") or app.get("packageName", "")).strip()
         if name == app_name:
-            return app
+            installed_version = str(app.get("installedVersion", "") or "").strip()
+            installed_volume = str(app.get("installedVolumeID", "") or "").strip()
+            if installed_version or installed_volume:
+                return app
+            return None
     return None
 
 
@@ -792,7 +796,7 @@ def api_download_status():
             existing = _find_installed_app(app_name)
             if existing:
                 installed = True
-                installed_version = str(existing.get("version", "") or existing.get("installedVersion", "")).strip()
+                installed_version = str(existing.get("installedVersion", "") or existing.get("version", "")).strip()
                 if not installed_info:
                     installed_info = {
                         "name": existing.get("displayName", "") or existing.get("name", "") or app_name,
@@ -804,7 +808,7 @@ def api_download_status():
             if not installed_version:
                 existing = _find_installed_app(app_name)
                 if existing:
-                    installed_version = str(existing.get("version", "") or existing.get("installedVersion", "")).strip()
+                    installed_version = str(existing.get("installedVersion", "") or existing.get("version", "")).strip()
                     if not installed_info:
                         installed_info = {
                             "name": existing.get("displayName", "") or existing.get("name", "") or app_name,
@@ -945,7 +949,7 @@ def api_install_info():
     installed_info = {}
     can_update = False
     if existing:
-        installed_version = str(existing.get("version", "") or existing.get("installedVersion", "")).strip()
+        installed_version = str(existing.get("installedVersion", "") or existing.get("version", "")).strip()
         installed_info = {
             "name": existing.get("displayName", "") or existing.get("name", "") or app_name,
             "version": installed_version,
@@ -1541,7 +1545,7 @@ def api_installed_app():
     existing = _find_installed_app(app_name)
     if not existing:
         return {"ok": True, "installed": False, "installedInfo": {}}
-    installed_version = str(existing.get("version", "") or existing.get("installedVersion", "")).strip()
+    installed_version = str(existing.get("installedVersion", "") or existing.get("version", "")).strip()
     return {
         "ok": True,
         "installed": True,
