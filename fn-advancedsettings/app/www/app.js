@@ -348,6 +348,8 @@ const I18N = {
     diagRunning: "执行中...",
     diagPlaceholder: "选择工具并执行诊断",
     diagNoTarget: "请输入目标地址",
+    diagStop: "终止",
+    diagStopped: "已终止",
   },
   "en-US": {
     appTitle: "Advanced Settings",
@@ -602,6 +604,8 @@ const I18N = {
     diagRunning: "Running...",
     diagPlaceholder: "Select a tool and run diagnostics",
     diagNoTarget: "Please enter a target address",
+    diagStop: "Stop",
+    diagStopped: "Stopped",
   },
 };
 
@@ -1159,6 +1163,7 @@ function renderPort() {
 
 let diagActive = "ping";
 let diagRunning = false;
+let diagAbortController = null;
 
 function isIpv6(s) {
   return /^[0-9a-fA-F:]+$/.test(s) && s.includes(":");
@@ -1187,7 +1192,8 @@ async function runDiag() {
   if (diagActive === "ping") {
     const target = (document.getElementById("diagPingTarget").value || "").trim();
     if (!target) { showToast(t("diagNoTarget"), true); return; }
-    const count = Math.max(1, Math.min(20, parseInt(document.getElementById("diagPingCount").value) || 4));
+    const rawCount = parseInt(document.getElementById("diagPingCount").value);
+    const count = Number.isNaN(rawCount) ? 4 : Math.min(9999, rawCount);
     const ipv6 = isIpv6(target);
     tool = "ping";
     data = { target, count, ipv6 };
@@ -1211,10 +1217,13 @@ async function runDiag() {
 
   diagRunning = true;
   const btn = document.getElementById("diagRunBtn");
-  btn.disabled = true;
-  btn.textContent = t("diagRunning");
+  const stopBtn = document.getElementById("diagStopBtn");
+  btn.classList.add("hidden");
+  stopBtn.classList.remove("hidden");
   output.value = "";
   output.classList.remove("diag-error");
+
+  diagAbortController = new AbortController();
 
   try {
     const response = await fetch(API_ENDPOINT, {
@@ -1223,6 +1232,7 @@ async function runDiag() {
       cache: "no-store",
       credentials: "include",
       body: JSON.stringify({ action: "diagStream", tool, ...data }),
+      signal: diagAbortController.signal,
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
@@ -1259,12 +1269,33 @@ async function runDiag() {
       }
     }
   } catch (e) {
-    output.value = e.message;
-    output.classList.add("diag-error");
+    if (e.name === "AbortError") {
+      output.value += (output.value ? "\n" : "") + t("diagStopped");
+    } else {
+      output.value = e.message;
+      output.classList.add("diag-error");
+    }
   } finally {
     diagRunning = false;
-    btn.disabled = false;
-    btn.textContent = t("diagRun");
+    diagAbortController = null;
+    btn.classList.remove("hidden");
+    stopBtn.classList.add("hidden");
+  }
+}
+
+async function stopDiag() {
+  if (!diagRunning) return;
+  try {
+    await fetch(API_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      credentials: "include",
+      body: JSON.stringify({ action: "diagStop" }),
+    });
+  } catch {}
+  if (diagAbortController) {
+    diagAbortController.abort();
   }
 }
 
@@ -1424,6 +1455,7 @@ document.getElementById("diagTabs").addEventListener("click", (event) => {
   if (tab) switchDiag(tab.dataset.diag);
 });
 document.getElementById("diagRunBtn").addEventListener("click", () => runDiag());
+document.getElementById("diagStopBtn").addEventListener("click", () => stopDiag());
 
 function showBridgeIpModal(name, saved, currentStp, bridgeType) {
   const modal = document.getElementById("confirmModal");

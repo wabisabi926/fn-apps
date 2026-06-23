@@ -186,7 +186,7 @@ button, input, select, textarea { font: inherit; }
   padding: 20px 20px 14px;
 }
 
-.primary-btn, .ghost-btn {
+.primary-btn, .ghost-btn, .diag-stop-btn {
   height: 30px;
   border: 0;
   border-radius: 6px;
@@ -216,6 +216,8 @@ button, input, select, textarea { font: inherit; }
   border-radius: 8px;
   background: var(--panel);
   padding: 16px 18px 18px;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .panel h3 {
@@ -647,7 +649,10 @@ button, input, select, textarea { font: inherit; }
   border-top: 1px solid var(--line);
   vertical-align: middle;
   text-align: left;
-  word-break: break-word;
+}
+
+.info-table td.mono {
+  white-space: nowrap;
 }
 
 .info-table thead th {
@@ -689,27 +694,33 @@ button, input, select, textarea { font: inherit; }
 #udpTable th:nth-child(1),
 #udpTable td:nth-child(1) {
   width: 40%;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #tcpTable th:nth-child(2),
 #tcpTable td:nth-child(2),
 #udpTable th:nth-child(2),
 #udpTable td:nth-child(2) {
-  width: 12%;
+  width: 8%;
 }
 
 #tcpTable th:nth-child(3),
 #tcpTable td:nth-child(3),
 #udpTable th:nth-child(3),
 #udpTable td:nth-child(3) {
-  width: 32%;
+  width: 36%;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #tcpTable th:nth-child(4),
 #tcpTable td:nth-child(4),
 #udpTable th:nth-child(4),
 #udpTable td:nth-child(4) {
-  width: 16%;
+  width: 8%;
 }
 
 #kernelParamTable th:nth-child(1),
@@ -1080,6 +1091,21 @@ button, input, select, textarea { font: inherit; }
   flex-shrink: 0;
 }
 
+.diag-toolbar .ghost-btn {
+  flex-shrink: 0;
+}
+
+.diag-toolbar .diag-stop-btn {
+  flex-shrink: 0;
+  background: var(--danger);
+  color: #fff;
+  border: none;
+}
+
+.diag-toolbar .diag-stop-btn:hover {
+  background: #e04452;
+}
+
 .diag-form {
   margin-bottom: 16px;
 }
@@ -1123,5 +1149,18 @@ button, input, select, textarea { font: inherit; }
   .switch-field { margin-left: 0; justify-content: flex-start; }
   .modal { padding: 12px; }
   .modal-content { width: min(760px, calc(100vw - 24px)); max-height: 92vh; padding: 14px; }
-  .info-table { min-width: 600px; }
+  .info-table { min-width: 800px; }
+  #pciTable, #usbTable, #tcpTable, #udpTable { table-layout: auto; }
+  #pciTable th, #pciTable td,
+  #usbTable th, #usbTable td,
+  #tcpTable th, #tcpTable td,
+  #udpTable th, #udpTable td { width: auto !important; }
+  #tcpTable th:nth-child(2), #tcpTable td:nth-child(2),
+  #udpTable th:nth-child(2), #udpTable td:nth-child(2) { width: 60px !important; }
+  #tcpTable th:nth-child(4), #tcpTable td:nth-child(4),
+  #udpTable th:nth-child(4), #udpTable td:nth-child(4) { width: 60px !important; }
+  #pciTable td, #usbTable td { overflow: visible; text-overflow: initial; }
+  .diag-toolbar { flex-wrap: wrap; }
+  .diag-tabs { flex: 1; min-width: 0; overflow-x: auto; }
+  .diag-tab { padding: 8px 10px; font-size: 13px; white-space: nowrap; }
 }

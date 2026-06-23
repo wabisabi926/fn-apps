@@ -53,6 +53,8 @@ PATHS = {
 
 REQUEST_CONTEXT = threading.local()
 TCP_MODULES_PROBED = False
+_diag_proc = None
+_diag_lock = threading.Lock()
 
 
 class ThreadingUnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
@@ -172,7 +174,7 @@ def sse_response():
     handler.send_response(200)
     handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
     handler.send_header("Cache-Control", "no-cache")
-    handler.send_header("Connection", "keep-alive")
+    handler.send_header("Connection", "close")
     handler.send_header("X-Accel-Buffering", "no")
     handler.end_headers()
     return handler.wfile
@@ -2303,7 +2305,9 @@ def diag_stream_start(target, tool, count=4, server=None, ipv6=False):
                 cmd = [shutil_which("ping") or "ping", "-6"]
         else:
             cmd = [shutil_which("ping") or "ping"]
-        cmd += ["-c", str(count), target]
+        if count >= 1:
+            cmd += ["-c", str(count)]
+        cmd.append(target)
     elif tool == "traceroute":
         if shutil_which("traceroute6") and ipv6:
             cmd = ["traceroute6", target]
@@ -2388,6 +2392,7 @@ def safe_dispatch(fn, body):
 
 
 def dispatch():
+    global _diag_proc
     body = request_body()
     action = body.get("action") or "read"
     if action == "read":
@@ -2424,10 +2429,23 @@ def dispatch():
         count = int(body.get("count", 4))
         server = body.get("server") or None
         ipv6 = body.get("ipv6", False)
+        with _diag_lock:
+            if _diag_proc is not None and _diag_proc.poll() is None:
+                try:
+                    _diag_proc.kill()
+                except Exception:
+                    pass
+                try:
+                    _diag_proc.stdout.close()
+                except Exception:
+                    pass
+            _diag_proc = None
         proc, err = diag_stream_start(target, tool, count, server, ipv6)
         if err:
             json_response({"ok": False, "message": err}, 400)
             return
+        with _diag_lock:
+            _diag_proc = proc
         wfile = sse_response()
         try:
             for line in proc.stdout:
@@ -2436,9 +2454,34 @@ def dispatch():
             sse_send(wfile, "done", {"rc": proc.returncode})
         except Exception as exc:
             sse_send(wfile, "error", {"message": str(exc)})
-            proc.kill()
+            try:
+                proc.kill()
+            except Exception:
+                pass
         finally:
             proc.stdout.close()
+            try:
+                wfile.close()
+            except Exception:
+                pass
+            with _diag_lock:
+                if _diag_proc is proc:
+                    _diag_proc = None
+    elif action == "diagStop":
+        with _diag_lock:
+            stopped = False
+            if _diag_proc is not None and _diag_proc.poll() is None:
+                try:
+                    _diag_proc.kill()
+                    stopped = True
+                except Exception:
+                    stopped = True
+                try:
+                    _diag_proc.stdout.close()
+                except Exception:
+                    pass
+                _diag_proc = None
+        json_response({"ok": True, "stopped": stopped})
     else:
         json_response({"ok": False, "message": "unsupported action"}, 400)
 

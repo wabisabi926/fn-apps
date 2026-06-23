@@ -255,7 +255,6 @@
                 </thead>
                 <tbody></tbody>
               </table>
-            </div>4hang          </div>
         </section>
 
         <section id="diagPanel" class="panel hidden" data-panel="diag">
@@ -268,11 +267,12 @@
               <button type="button" class="diag-tab" data-diag="arp">ARP</button>
             </div>
             <button id="diagRunBtn" class="primary-btn" type="button" data-i18n="diagRun">执行</button>
+            <button id="diagStopBtn" class="diag-stop-btn hidden" type="button" data-i18n="diagStop">终止</button>
           </div>
           <div id="diagPingForm" class="diag-form">
             <div class="grid">
               <label class="field"><span data-i18n="diagTarget">目标地址</span><input id="diagPingTarget" type="text" placeholder="download.liveupdate.fnnas.com" spellcheck="false"></label>
-              <label class="field diag-count-field"><span data-i18n="diagCount">次数</span><input id="diagPingCount" type="number" value="4" min="1" max="20"></label>
+              <label class="field diag-count-field"><span data-i18n="diagCount">次数</span><input id="diagPingCount" type="number" value="4" min="0" max="9999"></label>
             </div>
           </div>
           <div id="diagTracerouteForm" class="diag-form hidden">
