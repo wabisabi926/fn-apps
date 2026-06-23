@@ -151,25 +151,10 @@
             <h4 data-i18n="bridgeSettings">桥接设置</h4>
             <div class="bridge-toolbar">
               <label class="field bridge-name-field"><span data-i18n="bridgeName">桥接名称</span><input id="bridgeNameInput" type="text" placeholder="br0" spellcheck="false"></label>
-              <label class="check bridge-stp-check"><input id="bridgeStpCheck" type="checkbox"><span data-i18n="stp">STP</span></label>
+              <label class="field bridge-type-field"><span data-i18n="bridgeType">桥接类型</span><select id="bridgeTypeSelect"><option value="linux">Linux 桥接</option><option value="ovs">OVS 桥接</option></select></label>
               <button id="createBridgeBtn" class="ghost-btn" type="button" data-i18n="createBridge">创建桥接</button>
             </div>
-            <div class="table-wrap">
-              <table class="info-table" id="bridgeTable">
-                <thead>
-                  <tr>
-                    <th data-i18n="bridgeName">桥接名称</th>
-                    <th data-i18n="stp">STP</th>
-                    <th data-i18n="forwardDelay">转发延迟</th>
-                    <th data-i18n="helloTime">Hello 时间</th>
-                    <th data-i18n="maxAge">最大老化</th>
-                    <th data-i18n="members">从属接口</th>
-                    <th data-i18n="actions">操作</th>
-                  </tr>
-                </thead>
-                <tbody id="bridgeBody"></tbody>
-              </table>
-            </div>
+            <div id="bridgeList" class="data-list"></div>
           </div>
           <div class="info-subsection">
             <h4 data-i18n="nicSettings">网卡设置</h4>
@@ -208,7 +193,6 @@
                     <th data-i18n="description">描述</th>
                     <th data-i18n="deviceId">设备 ID</th>
                     <th data-i18n="driver">驱动</th>
-                    <th data-i18n="modules">内核模块</th>
                   </tr>
                 </thead>
                 <tbody></tbody>

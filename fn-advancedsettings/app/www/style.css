@@ -723,6 +723,75 @@ button, input, select, textarea { font: inherit; }
   width: 65%;
 }
 
+#pciTable,
+#usbTable {
+  table-layout: fixed;
+}
+
+#pciTable th:nth-child(1),
+#pciTable td:nth-child(1) {
+  width: 90px;
+}
+
+#pciTable th:nth-child(2),
+#pciTable td:nth-child(2) {
+  width: 180px;
+}
+
+#pciTable th:nth-child(3),
+#pciTable td:nth-child(3) {
+  width: auto;
+}
+
+#pciTable th:nth-child(4),
+#pciTable td:nth-child(4) {
+  width: 110px;
+}
+
+#pciTable th:nth-child(5),
+#pciTable td:nth-child(5) {
+  width: 150px;
+}
+
+#usbTable th:nth-child(1),
+#usbTable td:nth-child(1) {
+  width: 90px;
+}
+
+#usbTable th:nth-child(2),
+#usbTable td:nth-child(2) {
+  width: 180px;
+}
+
+#usbTable th:nth-child(3),
+#usbTable td:nth-child(3) {
+  width: auto;
+}
+
+#usbTable th:nth-child(4),
+#usbTable td:nth-child(4) {
+  width: 110px;
+}
+
+#usbTable th:nth-child(5),
+#usbTable td:nth-child(5) {
+  width: 150px;
+}
+
+#pciTable td,
+#usbTable td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#pciTable td:nth-child(5),
+#usbTable td:nth-child(5) {
+  overflow: visible;
+  text-overflow: initial;
+  white-space: normal;
+  word-break: break-word;
+}
+
 .class-id {
   color: var(--subtle);
   font-size: 11px;
@@ -745,17 +814,81 @@ button, input, select, textarea { font: inherit; }
 .bridge-toolbar {
   display: flex;
   align-items: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 12px;
 }
 
 .bridge-name-field {
-  min-width: 160px;
-  flex: 0 1 200px;
+  min-width: 140px;
+  flex: 0 1 180px;
 }
 
-.bridge-stp-check {
+.bridge-type-field {
+  min-width: 120px;
+  flex: 0 1 140px;
+}
+
+#createBridgeBtn {
+  height: 36px;
+  align-self: flex-end;
+  border-radius: 8px;
+}
+
+.bridge-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--field);
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.bridge-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 6px;
+}
+
+.bridge-card-name {
+  font-weight: 800;
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 13px;
+}
+
+.bridge-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.bridge-card-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  margin-bottom: 4px;
+}
+
+.bridge-card-row:last-child {
+  margin-bottom: 0;
+}
+
+.bridge-card-row .badge-driver {
+  font-size: 10px;
+  height: 18px;
+  padding: 0 5px;
+}
+
+.bridge-card-members {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .badge-member {
@@ -819,39 +952,6 @@ button, input, select, textarea { font: inherit; }
 .subtle {
   color: var(--subtle);
   font-size: 12px;
-}
-
-#bridgeTable th:nth-child(1),
-#bridgeTable td:nth-child(1) {
-  width: 14%;
-  white-space: nowrap;
-}
-
-#bridgeTable th:nth-child(2),
-#bridgeTable td:nth-child(2) {
-  width: 10%;
-  white-space: nowrap;
-}
-
-#bridgeTable th:nth-child(3),
-#bridgeTable td:nth-child(3),
-#bridgeTable th:nth-child(4),
-#bridgeTable td:nth-child(4),
-#bridgeTable th:nth-child(5),
-#bridgeTable td:nth-child(5) {
-  width: 10%;
-  white-space: nowrap;
-}
-
-#bridgeTable th:nth-child(6),
-#bridgeTable td:nth-child(6) {
-  width: 36%;
-}
-
-#bridgeTable th:nth-child(7),
-#bridgeTable td:nth-child(7) {
-  width: 10%;
-  white-space: nowrap;
 }
 
 .port-search {

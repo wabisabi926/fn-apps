@@ -282,6 +282,29 @@ const I18N = {
     noData: "暂无数据",
     bridgeSettings: "桥接设置",
     bridgeName: "桥接名称",
+    bridgeType: "桥接类型",
+    bridgeTypeLinux: "Linux 桥接",
+    bridgeTypeOvs: "OVS 桥接",
+    ipType: "IP 方式",
+    ipAddress: "IP 地址",
+    ipPrefixlen: "前缀长度",
+    ipGateway: "网关",
+    ipDns: "DNS",
+    ipMtu: "MTU",
+    ipDhcp: "DHCP",
+    ipStatic: "静态",
+    ipNone: "未配置",
+    ipEdit: "编辑",
+    ipv4Address: "IPv4 地址",
+    ipv4Prefixlen: "IPv4 前缀",
+    ipv4Gateway: "IPv4 网关",
+    ipv4Dns: "IPv4 DNS",
+    ipv6Address: "IPv6 地址",
+    ipv6Prefixlen: "IPv6 前缀",
+    ipv6Gateway: "IPv6 网关",
+    ipv6Dns: "IPv6 DNS",
+    ip4Type: "IPv4 方式",
+    ip6Type: "IPv6 方式",
     stp: "STP",
     forwardDelay: "转发延迟",
     helloTime: "Hello 时间",
@@ -513,6 +536,29 @@ const I18N = {
     noData: "No data",
     bridgeSettings: "Bridge Settings",
     bridgeName: "Bridge Name",
+    bridgeType: "Bridge Type",
+    bridgeTypeLinux: "Linux Bridge",
+    bridgeTypeOvs: "OVS Bridge",
+    ipType: "IP Type",
+    ipAddress: "IP Address",
+    ipPrefixlen: "Prefix Length",
+    ipGateway: "Gateway",
+    ipDns: "DNS",
+    ipMtu: "MTU",
+    ipDhcp: "DHCP",
+    ipStatic: "Static",
+    ipNone: "Unconfigured",
+    ipEdit: "Edit",
+    ipv4Address: "IPv4 Address",
+    ipv4Prefixlen: "IPv4 Prefix",
+    ipv4Gateway: "IPv4 Gateway",
+    ipv4Dns: "IPv4 DNS",
+    ipv6Address: "IPv6 Address",
+    ipv6Prefixlen: "IPv6 Prefix",
+    ipv6Gateway: "IPv6 Gateway",
+    ipv6Dns: "IPv6 DNS",
+    ip4Type: "IPv4 Type",
+    ip6Type: "IPv6 Type",
     stp: "STP",
     forwardDelay: "Forward Delay",
     helloTime: "Hello Time",
@@ -987,26 +1033,59 @@ function bridgeMemberStateLabel(state) {
 
 function renderBridges() {
   const bridges = state.data.network?.bridges || [];
+  const savedBridges = state.data.network?.saved_bridges || {};
   const availableIfaces = state.data.network?.available_ifaces || [];
   const bridgeNames = new Set(bridges.map((b) => b.name));
   const memberNames = new Set(bridges.flatMap((b) => b.members.map((m) => m.name)));
   const freeIfaces = availableIfaces.filter((n) => !bridgeNames.has(n) && !memberNames.has(n) && n !== "lo");
-  const tbody = document.getElementById("bridgeBody");
-  if (!tbody) return;
-  tbody.innerHTML = bridges.length ? bridges.map((bridge) => {
-    const memberHtml = bridge.members.length ? bridge.members.map((m) => `<span class="badge-member">${escapeHtml(m.name)}<span class="member-state">${escapeHtml(bridgeMemberStateLabel(m.state))}</span><button type="button" class="member-remove-btn" data-bridge="${escapeHtml(bridge.name)}" data-member="${escapeHtml(m.name)}" title="${escapeHtml(t("removeMember"))}">×</button></span>`).join(" ") : `<span class="subtle">${escapeHtml(t("noData"))}</span>`;
+  const container = document.getElementById("bridgeList");
+  if (!container) return;
+  container.innerHTML = bridges.length ? bridges.map((bridge) => {
+    const saved = savedBridges[bridge.name] || {};
+    const ip4Type = saved.ip4_type || (saved.ip_type === "dhcp" ? (saved.ipv4_enabled !== false ? "dhcp" : "") : saved.ip_type === "static" ? (saved.ipv4_enabled !== false ? "static" : "") : "");
+    const ip6Type = saved.ip6_type || (saved.ip_type === "dhcp" ? (saved.ipv6_enabled ? "dhcp" : "") : saved.ip_type === "static" ? (saved.ipv6_enabled ? "static" : "") : "");
+    const ipTypeLabel = (v) => v === "dhcp" ? t("ipDhcp") : v === "static" ? t("ipStatic") : t("ipNone");
+    const ip4Badge = ip4Type ? `<span class="badge-driver">IPv4 ${escapeHtml(ipTypeLabel(ip4Type))}</span>` : `<span class="subtle">IPv4 ${escapeHtml(ipTypeLabel(ip4Type))}</span>`;
+    const ip6Badge = ip6Type ? `<span class="badge-driver">IPv6 ${escapeHtml(ipTypeLabel(ip6Type))}</span>` : `<span class="subtle">IPv6 ${escapeHtml(ipTypeLabel(ip6Type))}</span>`;
+    const bridgeType = bridge.type || saved.bridge_type || "linux";
+    const bridgeTypeLabel = bridgeType === "ovs" ? t("bridgeTypeOvs") : t("bridgeTypeLinux");
+    const bridgeTypeBadge = `<span class="badge-driver">${escapeHtml(bridgeTypeLabel)}</span>`;
+    const allAddrs = bridge.addrs || [];
+    const ipv4Addrs = allAddrs.filter((a) => a.family === "inet");
+    const ipv6Addrs = allAddrs.filter((a) => a.family === "inet6");
+    const ipv4Display = ipv4Addrs.length ? ipv4Addrs.map((a) => `${a.address}/${a.prefixlen}`).join(", ") : "";
+    const ipv6Display = ipv6Addrs.length ? ipv6Addrs.map((a) => `${a.address}/${a.prefixlen}`).join(", ") : "";
+    const addrParts = [];
+    if (ipv4Display) addrParts.push(`IPv4: ${ipv4Display}`);
+    if (ipv6Display) addrParts.push(`IPv6: ${ipv6Display}`);
+    const addrDisplay = addrParts.length ? addrParts.join(" / ") : "";
+    const mtu = saved.ip_mtu || "";
+    const dns = saved.ip_dns || "";
+    const row2 = [bridgeTypeBadge, ip4Badge, ip6Badge];
+    if (mtu) row2.push(`<span>MTU ${escapeHtml(mtu)}</span>`);
+    if (dns) row2.push(`<span>DNS ${escapeHtml(dns)}</span>`);
+    const row3 = addrDisplay ? [`<span class="mono" style="font-size:11px">${escapeHtml(addrDisplay)}</span>`] : [];
+    const row4 = [`<span>STP ${bridge.stp ? t("enabled") : t("disabled")}</span>`, `<span>${escapeHtml(t("forwardDelay"))} ${escapeHtml(bridge.forward_delay || "-")}</span>`, `<span>${escapeHtml(t("helloTime"))} ${escapeHtml(bridge.hello_time || "-")}</span>`, `<span>${escapeHtml(t("maxAge"))} ${escapeHtml(bridge.max_age || "-")}</span>`];
+    const memberHtml = bridge.members.length ? bridge.members.map((m) => `<span class="badge-member">${escapeHtml(m.name)}<span class="member-state">${escapeHtml(bridgeMemberStateLabel(m.state))}</span><button type="button" class="member-remove-btn" data-bridge="${escapeHtml(bridge.name)}" data-member="${escapeHtml(m.name)}" title="${escapeHtml(t("removeMember"))}">×</button></span>`).join("") : `<span class="subtle">${escapeHtml(t("noData"))}</span>`;
     const ifaceOptions = freeIfaces.length ? freeIfaces.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("") : "";
     const addMemberHtml = freeIfaces.length ? `<select class="bridge-add-select" data-bridge="${escapeHtml(bridge.name)}"><option value="">${escapeHtml(t("selectInterface"))}</option>${ifaceOptions}</select>` : "";
-    return `<tr>
-      <td class="mono">${escapeHtml(bridge.name)}</td>
-      <td><label class="check stp-toggle"><input type="checkbox" data-bridge-stp="${escapeHtml(bridge.name)}" ${bridge.stp ? "checked" : ""}><span>${bridge.stp ? t("enabled") : t("disabled")}</span></label></td>
-      <td class="mono">${escapeHtml(bridge.forward_delay || "-")}</td>
-      <td class="mono">${escapeHtml(bridge.hello_time || "-")}</td>
-      <td class="mono">${escapeHtml(bridge.max_age || "-")}</td>
-      <td>${memberHtml} ${addMemberHtml}</td>
-      <td><button type="button" class="ghost-btn bridge-delete-btn" data-bridge="${escapeHtml(bridge.name)}">${escapeHtml(t("deleteBridge"))}</button></td>
-    </tr>`;
-  }).join("") : `<tr><td colspan="7" class="empty-cell">${escapeHtml(t("noData"))}</td></tr>`;
+    const savedData = encodeURIComponent(JSON.stringify(saved));
+    return `<div class="bridge-card" data-bridge-card="${escapeHtml(bridge.name)}">
+      <div class="bridge-card-head">
+        <span class="bridge-card-name">${escapeHtml(bridge.name)}</span>
+        <div class="bridge-card-actions">
+          <button type="button" class="ghost-btn bridge-edit-btn" data-bridge="${escapeHtml(bridge.name)}" data-bridge-type="${escapeHtml(bridgeType)}" data-saved="${savedData}">${escapeHtml(t("ipEdit"))}</button>
+          <button type="button" class="ghost-btn bridge-delete-btn" data-bridge="${escapeHtml(bridge.name)}" data-bridge-type="${escapeHtml(bridgeType)}">${escapeHtml(t("deleteBridge"))}</button>
+        </div>
+      </div>
+      ${row2.length ? `<div class="bridge-card-row">${row2.join("")}</div>` : ""}
+      ${row3.length ? `<div class="bridge-card-row">${row3.join("")}</div>` : ""}
+      <div class="bridge-card-row">${row4.join("")}</div>
+      <div class="bridge-card-row bridge-card-members">
+        ${memberHtml} ${addMemberHtml}
+      </div>
+    </div>`;
+  }).join("") : `<div class="subtle" style="text-align:center;padding:20px">${escapeHtml(t("noData"))}</div>`;
 }
 
 function renderProxy() {
@@ -1042,8 +1121,7 @@ function renderDevice() {
       <td>${escapeHtml(item.description || "-")}</td>
       <td class="mono">${escapeHtml(item.device_id || "-")}</td>
       <td>${item.driver ? `<span class="badge-driver">${escapeHtml(item.driver)}</span>` : "-"}</td>
-      <td class="mono">${escapeHtml(item.modules || "-")}</td>
-    </tr>`).join("") : `<tr><td colspan="6" class="empty-cell">${escapeHtml(t("noData"))}</td></tr>`;
+    </tr>`).join("") : `<tr><td colspan="5" class="empty-cell">${escapeHtml(t("noData"))}</td></tr>`;
   usbTbody.innerHTML = usb.length ? usb.map((item) => `<tr>
       <td class="mono">${escapeHtml(item.bus || "-")}</td>
       <td class="mono">${escapeHtml(item.device || "-")}</td>
@@ -1104,30 +1182,30 @@ function switchDiag(tool) {
 async function runDiag() {
   if (diagRunning) return;
   const output = document.getElementById("diagOutput");
-  let action, data;
+  let tool, data;
 
   if (diagActive === "ping") {
     const target = (document.getElementById("diagPingTarget").value || "").trim();
     if (!target) { showToast(t("diagNoTarget"), true); return; }
     const count = Math.max(1, Math.min(20, parseInt(document.getElementById("diagPingCount").value) || 4));
     const ipv6 = isIpv6(target);
-    action = "diagPing";
+    tool = "ping";
     data = { target, count, ipv6 };
   } else if (diagActive === "traceroute") {
     const target = (document.getElementById("diagTracerouteTarget").value || "").trim();
     if (!target) { showToast(t("diagNoTarget"), true); return; }
     const ipv6 = isIpv6(target);
-    action = "diagTraceroute";
+    tool = "traceroute";
     data = { target, ipv6 };
   } else if (diagActive === "nslookup") {
     const target = (document.getElementById("diagNslookupTarget").value || "").trim();
     if (!target) { showToast(t("diagNoTarget"), true); return; }
     const server = (document.getElementById("diagNslookupServer").value || "").trim();
     const ipv6 = isIpv6(target);
-    action = "diagNslookup";
+    tool = "nslookup";
     data = { target, server: server || undefined, ipv6 };
   } else if (diagActive === "arp") {
-    action = "diagArp";
+    tool = "arp";
     data = { ipv6: false };
   }
 
@@ -1135,12 +1213,51 @@ async function runDiag() {
   const btn = document.getElementById("diagRunBtn");
   btn.disabled = true;
   btn.textContent = t("diagRunning");
-  output.value = t("diagRunning");
+  output.value = "";
+  output.classList.remove("diag-error");
+
   try {
-    const result = await api(action, data);
-    output.value = result.output || "";
-    if (!result.success) output.classList.add("diag-error");
-    else output.classList.remove("diag-error");
+    const response = await fetch(API_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      credentials: "include",
+      body: JSON.stringify({ action: "diagStream", tool, ...data }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${response.status}`);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() || "";
+      for (const part of parts) {
+        let eventType = "data";
+        let eventData = "";
+        for (const line of part.split("\n")) {
+          if (line.startsWith("event: ")) eventType = line.slice(7).trim();
+          else if (line.startsWith("data: ")) eventData = line.slice(6);
+        }
+        if (!eventData) continue;
+        let parsed;
+        try { parsed = JSON.parse(eventData); } catch { continue; }
+        if (eventType === "data") {
+          output.value += (output.value ? "\n" : "") + (parsed.line || "");
+          output.scrollTop = output.scrollHeight;
+        } else if (eventType === "done") {
+          if (parsed.rc !== 0) output.classList.add("diag-error");
+        } else if (eventType === "error") {
+          output.value += (output.value ? "\n" : "") + (parsed.message || "error");
+          output.classList.add("diag-error");
+        }
+      }
+    }
   } catch (e) {
     output.value = e.message;
     output.classList.add("diag-error");
@@ -1308,12 +1425,94 @@ document.getElementById("diagTabs").addEventListener("click", (event) => {
 });
 document.getElementById("diagRunBtn").addEventListener("click", () => runDiag());
 
+function showBridgeIpModal(name, saved, currentStp, bridgeType) {
+  const modal = document.getElementById("confirmModal");
+  const content = modal.querySelector(".confirm-content") || modal.querySelector(".modal-content");
+  const isConfirm = !!content;
+  const origHtml = isConfirm ? content.innerHTML : "";
+  const origStyle = content.getAttribute("style") || "";
+  const curIp4Type = saved.ip4_type || (saved.ip_type === "dhcp" ? (saved.ipv4_enabled !== false ? "dhcp" : "") : saved.ip_type === "static" ? (saved.ipv4_enabled !== false ? "static" : "") : "");
+  const curIp6Type = saved.ip6_type || (saved.ip_type === "dhcp" ? (saved.ipv6_enabled ? "dhcp" : "") : saved.ip_type === "static" ? (saved.ipv6_enabled ? "static" : "") : "");
+  const ipTypeOpts = (cur) => `<option value=""${!cur ? " selected" : ""}>${escapeHtml(t("ipNone"))}</option><option value="dhcp"${cur === "dhcp" ? " selected" : ""}>DHCP</option><option value="static"${cur === "static" ? " selected" : ""}>${escapeHtml(t("ipStatic"))}</option>`;
+  content.setAttribute("style", "width:min(680px,calc(100vw - 48px));max-height:88vh;overflow:auto;padding:20px;");
+  content.innerHTML = `
+    <p style="margin:0 0 16px;font-size:14px;font-weight:800;">${escapeHtml(name)} - ${escapeHtml(t("ipEdit"))}</p>
+    <div class="grid" style="margin-bottom:16px;">
+      <label class="field" id="bridgeModalMtuWrap"><span>${escapeHtml(t("ipMtu"))}</span><input id="bridgeModalMtu" type="text" value="${escapeHtml(saved.ip_mtu || "")}" placeholder="1500" spellcheck="false"></label>
+      <label class="check" style="align-self:end;margin-bottom:6px;"><input id="bridgeModalStp" type="checkbox" ${currentStp ? "checked" : ""}><span>${escapeHtml(t("stp"))}</span></label>
+    </div>
+    <div style="margin-bottom:16px;">
+      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:var(--muted);">IPv4</p>
+      <div class="grid" style="margin-bottom:8px;">
+        <label class="field"><span>${escapeHtml(t("ip4Type"))}</span><select id="bridgeModalIp4Type" style="width:100%;min-height:36px;border:1px solid var(--line);border-radius:8px;background:var(--field);color:var(--text);padding:8px 10px;font-size:13px;font-weight:600;">${ipTypeOpts(curIp4Type)}</select></label>
+      </div>
+      <div id="bridgeModalIpv4Static" style="${curIp4Type === "static" ? "" : "display:none;"}">
+        <div class="grid" style="margin-bottom:12px;">
+          <label class="field"><span>${escapeHtml(t("ipv4Address"))}</span><input id="bridgeModalIpv4Addr" type="text" value="${escapeHtml(saved.ip_address || "")}" placeholder="192.168.1.100" spellcheck="false"></label>
+          <label class="field"><span>${escapeHtml(t("ipv4Prefixlen"))}</span><input id="bridgeModalIpv4Prefix" type="text" value="${escapeHtml(saved.ip_prefixlen || "24")}" placeholder="24" spellcheck="false"></label>
+          <label class="field"><span>${escapeHtml(t("ipv4Gateway"))}</span><input id="bridgeModalIpv4Gw" type="text" value="${escapeHtml(saved.ip_gateway || "")}" placeholder="192.168.1.1" spellcheck="false"></label>
+          <label class="field"><span>${escapeHtml(t("ipv4Dns"))}</span><input id="bridgeModalIpv4Dns" type="text" value="${escapeHtml(saved.ip_dns || "")}" placeholder="8.8.8.8" spellcheck="false"></label>
+        </div>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:var(--muted);">IPv6</p>
+      <div class="grid" style="margin-bottom:8px;">
+        <label class="field"><span>${escapeHtml(t("ip6Type"))}</span><select id="bridgeModalIp6Type" style="width:100%;min-height:36px;border:1px solid var(--line);border-radius:8px;background:var(--field);color:var(--text);padding:8px 10px;font-size:13px;font-weight:600;">${ipTypeOpts(curIp6Type)}</select></label>
+      </div>
+      <div id="bridgeModalIpv6Static" style="${curIp6Type === "static" ? "" : "display:none;"}">
+        <div class="grid" style="margin-bottom:12px;">
+          <label class="field"><span>${escapeHtml(t("ipv6Address"))}</span><input id="bridgeModalIpv6Addr" type="text" value="${escapeHtml(saved.ip6_address || "")}" placeholder="2001:db8::1" spellcheck="false"></label>
+          <label class="field"><span>${escapeHtml(t("ipv6Prefixlen"))}</span><input id="bridgeModalIpv6Prefix" type="text" value="${escapeHtml(saved.ip6_prefixlen || "64")}" placeholder="64" spellcheck="false"></label>
+          <label class="field"><span>${escapeHtml(t("ipv6Gateway"))}</span><input id="bridgeModalIpv6Gw" type="text" value="${escapeHtml(saved.ip6_gateway || "")}" placeholder="2001:db8::1" spellcheck="false"></label>
+          <label class="field"><span>${escapeHtml(t("ipv6Dns"))}</span><input id="bridgeModalIpv6Dns" type="text" value="${escapeHtml(saved.ip6_dns || "")}" placeholder="2001:4860:4860::8888" spellcheck="false"></label>
+        </div>
+      </div>
+    </div>
+    <div class="confirm-actions">
+      <button id="bridgeModalCancel" class="ghost-btn" type="button">${escapeHtml(t("cancel"))}</button>
+      <button id="bridgeModalOk" class="primary-btn" type="button">${escapeHtml(t("confirm"))}</button>
+    </div>
+  `;
+  modal.classList.remove("hidden");
+  const ip4TypeSelect = document.getElementById("bridgeModalIp4Type");
+  const ip6TypeSelect = document.getElementById("bridgeModalIp6Type");
+  ip4TypeSelect.addEventListener("change", () => {
+    document.getElementById("bridgeModalIpv4Static").style.display = ip4TypeSelect.value === "static" ? "" : "none";
+  });
+  ip6TypeSelect.addEventListener("change", () => {
+    document.getElementById("bridgeModalIpv6Static").style.display = ip6TypeSelect.value === "static" ? "" : "none";
+  });
+  const cleanup = () => {
+    modal.classList.add("hidden");
+    content.innerHTML = origHtml;
+    content.setAttribute("style", origStyle);
+  };
+  document.getElementById("bridgeModalCancel").addEventListener("click", cleanup);
+  document.getElementById("bridgeModalOk").addEventListener("click", () => {
+    const ip4_type = ip4TypeSelect.value;
+    const ip6_type = ip6TypeSelect.value;
+    const ip_mtu = document.getElementById("bridgeModalMtu").value.trim();
+    const stp = document.getElementById("bridgeModalStp").checked;
+    const ip_address = document.getElementById("bridgeModalIpv4Addr").value.trim();
+    const ip_prefixlen = document.getElementById("bridgeModalIpv4Prefix").value.trim() || "24";
+    const ip_gateway = document.getElementById("bridgeModalIpv4Gw").value.trim();
+    const ip_dns = document.getElementById("bridgeModalIpv4Dns").value.trim();
+    const ip6_address = document.getElementById("bridgeModalIpv6Addr").value.trim();
+    const ip6_prefixlen = document.getElementById("bridgeModalIpv6Prefix").value.trim() || "64";
+    const ip6_gateway = document.getElementById("bridgeModalIpv6Gw").value.trim();
+    const ip6_dns = document.getElementById("bridgeModalIpv6Dns").value.trim();
+    cleanup();
+    bridgeAction("update_ip", { name, ip4_type, ip6_type, ip_address, ip_prefixlen, ip_gateway, ip_dns, ip_mtu, ip6_address, ip6_prefixlen, ip6_gateway, ip6_dns, stp, bridge_type: bridgeType });
+  });
+}
+
 async function bridgeAction(action, data = {}) {
   if (state.saving) return;
   setSaving(true);
   try {
     const result = await api("saveBridge", { bridge_action: action, ...data });
-    state.data.network = { ...state.data.network, bridges: result.bridges, available_ifaces: result.available_ifaces };
+    state.data.network = { ...state.data.network, bridges: result.bridges, saved_bridges: result.saved_bridges, available_ifaces: result.available_ifaces };
     renderBridges();
     showToast(t("saved"));
   } catch (error) {
@@ -1325,20 +1524,21 @@ async function bridgeAction(action, data = {}) {
 
 document.getElementById("createBridgeBtn").addEventListener("click", () => {
   const name = document.getElementById("bridgeNameInput").value.trim();
-  const stp = document.getElementById("bridgeStpCheck").checked;
+  const bridge_type = document.getElementById("bridgeTypeSelect").value;
   if (!name) return;
-  bridgeAction("create", { name, stp }).then(() => {
+  bridgeAction("create", { name, bridge_type }).then(() => {
     document.getElementById("bridgeNameInput").value = "";
-    document.getElementById("bridgeStpCheck").checked = false;
+    document.getElementById("bridgeTypeSelect").value = "linux";
   });
 });
 
-document.getElementById("bridgeBody").addEventListener("click", async (event) => {
+document.getElementById("bridgeList").addEventListener("click", async (event) => {
   const deleteBtn = event.target.closest(".bridge-delete-btn");
   if (deleteBtn) {
     const name = deleteBtn.dataset.bridge;
+    const bridge_type = deleteBtn.dataset.bridgeType;
     if (await showConfirm(`${t("confirmDeleteBridge")} ${name}?`)) {
-      bridgeAction("delete", { name });
+      bridgeAction("delete", { name, bridge_type });
     }
     return;
   }
@@ -1346,20 +1546,21 @@ document.getElementById("bridgeBody").addEventListener("click", async (event) =>
   if (removeBtn) {
     const name = removeBtn.dataset.bridge;
     const member = removeBtn.dataset.member;
-    if (await showConfirm(`${t("confirmRemoveMember")} ${member}?`)) {
-      bridgeAction("remove_member", { name, member });
-    }
+    bridgeAction("remove_member", { name, member });
+    return;
+  }
+  const editBtn = event.target.closest(".bridge-edit-btn");
+  if (editBtn) {
+    const name = editBtn.dataset.bridge;
+    const bridge_type = editBtn.dataset.bridgeType;
+    const saved = JSON.parse(decodeURIComponent(editBtn.dataset.saved || "{}"));
+    const bridge = (state.data.network?.bridges || []).find((b) => b.name === name);
+    showBridgeIpModal(name, saved, bridge?.stp || false, bridge_type);
     return;
   }
 });
 
-document.getElementById("bridgeBody").addEventListener("change", (event) => {
-  const stpCheckbox = event.target.closest("[data-bridge-stp]");
-  if (stpCheckbox) {
-    const name = stpCheckbox.dataset.bridgeStp;
-    bridgeAction("update_stp", { name, stp: stpCheckbox.checked });
-    return;
-  }
+document.getElementById("bridgeList").addEventListener("change", (event) => {
   const addSelect = event.target.closest(".bridge-add-select");
   if (addSelect && addSelect.value) {
     const name = addSelect.dataset.bridge;

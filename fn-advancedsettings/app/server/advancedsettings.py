@@ -167,6 +167,26 @@ def json_response(payload, status=200):
         handler.wfile.write(body)
 
 
+def sse_response():
+    handler = current_request().get("handler")
+    handler.send_response(200)
+    handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
+    handler.send_header("Cache-Control", "no-cache")
+    handler.send_header("Connection", "keep-alive")
+    handler.send_header("X-Accel-Buffering", "no")
+    handler.end_headers()
+    return handler.wfile
+
+
+def sse_send(wfile, event, data):
+    payload = f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+    try:
+        wfile.write(payload.encode("utf-8"))
+        wfile.flush()
+    except Exception:
+        pass
+
+
 def request_body():
     req = current_request() or {}
     body = req.get("body") or b""
@@ -237,6 +257,23 @@ def valid_iface_name(name):
     return bool(name and re.match(r"^[A-Za-z0-9_.:-]+$", str(name)))
 
 
+def read_iface_addrs(name):
+    result = run(["ip", "-j", "addr", "show", "dev", name], timeout=10)
+    addrs = []
+    try:
+        for iface_info in json.loads(result["stdout"] or "[]"):
+            for addr_info in iface_info.get("addr_info", []):
+                if addr_info.get("family") in ("inet", "inet6") and addr_info.get("scope") == "global":
+                    addrs.append({
+                        "family": addr_info["family"],
+                        "address": addr_info.get("local", ""),
+                        "prefixlen": addr_info.get("prefixlen", 0),
+                    })
+    except Exception:
+        pass
+    return addrs
+
+
 def valid_bridge_name(name):
     return bool(name and re.match(r"^[A-Za-z0-9_.:-]+$", str(name)))
 
@@ -274,7 +311,29 @@ def normalize_bridge_state(state):
             for member in cfg.get("members") or []:
                 if valid_iface_name(member) and member not in members:
                     members.append(member)
-            bridges[name] = {"stp": bool(cfg.get("stp")), "members": members}
+            ip_type = str(cfg.get("ip_type") or "").strip()
+            if ip_type not in ("dhcp", "static"):
+                ip_type = ""
+            bridge_type = str(cfg.get("bridge_type") or "").strip()
+            if bridge_type not in ("linux", "ovs"):
+                bridge_type = "linux"
+            bridges[name] = {
+                "bridge_type": bridge_type,
+                "stp": bool(cfg.get("stp")),
+                "members": members,
+                "ip_type": ip_type,
+                "ip4_type": str(cfg.get("ip4_type") or "").strip(),
+                "ip6_type": str(cfg.get("ip6_type") or "").strip(),
+                "ip_address": str(cfg.get("ip_address") or "").strip(),
+                "ip_prefixlen": str(cfg.get("ip_prefixlen") or "").strip(),
+                "ip_gateway": str(cfg.get("ip_gateway") or "").strip(),
+                "ip_dns": str(cfg.get("ip_dns") or "").strip(),
+                "ip_mtu": str(cfg.get("ip_mtu") or "").strip(),
+                "ip6_address": str(cfg.get("ip6_address") or "").strip(),
+                "ip6_prefixlen": str(cfg.get("ip6_prefixlen") or "").strip(),
+                "ip6_gateway": str(cfg.get("ip6_gateway") or "").strip(),
+                "ip6_dns": str(cfg.get("ip6_dns") or "").strip(),
+            }
     state["bridges"] = bridges
     return bridges
 
@@ -1332,11 +1391,58 @@ def list_network():
 BRIDGE_PORT_STATES = {0: "disabled", 1: "listening", 2: "learning", 3: "forwarding", 4: "blocking"}
 
 
+def read_ovs_bridges():
+    bridges = []
+    ovs_vsctl = shutil_which("ovs-vsctl")
+    if not ovs_vsctl:
+        return bridges
+    try:
+        result = run([ovs_vsctl, "list-br"], timeout=10)
+        if result.get("rc") != 0:
+            return bridges
+        for line in (result.get("stdout") or "").splitlines():
+            name = line.strip()
+            if not name:
+                continue
+            stp = False
+            try:
+                stp_result = run([ovs_vsctl, "get", "Bridge", name, "stp_enable"], timeout=5)
+                stp = stp_result.get("stdout", "").strip().lower() == "true"
+            except Exception:
+                pass
+            members = []
+            try:
+                port_result = run([ovs_vsctl, "list-ports", name], timeout=5)
+                for pname in (port_result.get("stdout") or "").splitlines():
+                    pname = pname.strip()
+                    if pname:
+                        members.append({"name": pname, "state": "forwarding", "priority": "-", "cost": "-"})
+            except Exception:
+                pass
+            bridges.append({
+                "name": name,
+                "type": "ovs",
+                "stp": stp,
+                "forward_delay": "-",
+                "hello_time": "-",
+                "max_age": "-",
+                "vlan_filtering": False,
+                "default_pvid": "1",
+                "members": members,
+                "addrs": read_iface_addrs(name),
+            })
+    except Exception:
+        pass
+    return bridges
+
+
 def read_bridges():
     bridges = []
+    linux_names = set()
     for bridge_dir in sorted(Path("/sys/class/net").glob("*/bridge")):
         iface_dir = bridge_dir.parent
         name = iface_dir.name
+        linux_names.add(name)
         stp = read_text(bridge_dir / "stp_state").strip()
         forward_delay = read_text(bridge_dir / "forward_delay").strip()
         hello_time = read_text(bridge_dir / "hello_time").strip()
@@ -1357,6 +1463,7 @@ def read_bridges():
                 members.append({"name": mname, "state": state_name, "priority": priority, "cost": cost})
         bridges.append({
             "name": name,
+            "type": "linux",
             "stp": stp == "1",
             "forward_delay": forward_delay,
             "hello_time": hello_time,
@@ -1364,7 +1471,11 @@ def read_bridges():
             "vlan_filtering": vlan_filtering == "1",
             "default_pvid": default_pvid,
             "members": members,
+            "addrs": read_iface_addrs(name),
         })
+    for ovs_bridge in read_ovs_bridges():
+        if ovs_bridge["name"] not in linux_names:
+            bridges.append(ovs_bridge)
     return bridges
 
 
@@ -1380,30 +1491,75 @@ def save_bridge(data):
             raise RuntimeError("Invalid bridge name")
         if (Path("/sys/class/net") / name).exists():
             raise RuntimeError(f"Interface {name} already exists")
-        results.append(run(["ip", "link", "add", "name", name, "type", "bridge"], timeout=15))
-        stp = bool(data.get("stp"))
-        if stp:
-            stp_path = Path(f"/sys/class/net/{name}/bridge/stp_state")
-            if stp_path.exists():
-                try:
-                    stp_path.write_text("1", encoding="utf-8")
-                except Exception:
-                    results.append(run(["ip", "link", "set", name, "type", "bridge", "stp_state", "1"], timeout=10))
-        results.append(run(["ip", "link", "set", name, "up"], timeout=10))
-        bridges[name] = {"stp": stp, "members": []}
+        bridge_type = str(data.get("bridge_type") or "linux").strip()
+        if bridge_type not in ("linux", "ovs"):
+            bridge_type = "linux"
+        if bridge_type == "ovs":
+            ovs_vsctl = shutil_which("ovs-vsctl")
+            if not ovs_vsctl:
+                raise RuntimeError("ovs-vsctl not found, Open vSwitch is not installed")
+            results.append(run([ovs_vsctl, "add-br", name], timeout=15))
+            stp = bool(data.get("stp"))
+            if stp:
+                results.append(run([ovs_vsctl, "set", "Bridge", name, "stp_enable=true"], timeout=10))
+            results.append(run(["ip", "link", "set", name, "up"], timeout=10))
+        else:
+            results.append(run(["ip", "link", "add", "name", name, "type", "bridge"], timeout=15))
+            stp = bool(data.get("stp"))
+            if stp:
+                stp_path = Path(f"/sys/class/net/{name}/bridge/stp_state")
+                if stp_path.exists():
+                    try:
+                        stp_path.write_text("1", encoding="utf-8")
+                    except Exception:
+                        results.append(run(["ip", "link", "set", name, "type", "bridge", "stp_state", "1"], timeout=10))
+            results.append(run(["ip", "link", "set", name, "up"], timeout=10))
+        bridges[name] = {
+            "bridge_type": bridge_type,
+            "stp": stp,
+            "members": [],
+            "ip_type": "",
+            "ip4_type": "",
+            "ip6_type": "",
+            "ip_address": "",
+            "ip_prefixlen": "",
+            "ip_gateway": "",
+            "ip_dns": "",
+            "ip_mtu": "",
+            "ip6_address": "",
+            "ip6_prefixlen": "",
+            "ip6_gateway": "",
+            "ip6_dns": "",
+        }
     elif action == "delete":
         name = str(data.get("name") or "").strip()
         if not name:
             raise RuntimeError("Bridge name is required")
-        results.append(run(["ip", "link", "set", name, "down"], timeout=10))
-        results.append(run(["ip", "link", "del", name], timeout=15))
+        saved_cfg = bridges.get(name, {})
+        bridge_type = saved_cfg.get("bridge_type") or str(data.get("bridge_type") or "").strip()
+        if bridge_type not in ("linux", "ovs"):
+            bridge_type = "ovs" if (Path(f"/sys/class/net/{name}/bridge").exists() is False and shutil_which("ovs-vsctl")) else "linux"
+        if bridge_type == "ovs" and shutil_which("ovs-vsctl"):
+            results.append(run(["ip", "link", "set", name, "down"], timeout=10))
+            results.append(run([shutil_which("ovs-vsctl"), "del-br", name], timeout=15))
+        else:
+            results.append(run(["ip", "link", "set", name, "down"], timeout=10))
+            results.append(run(["ip", "link", "del", name], timeout=15))
         bridges.pop(name, None)
     elif action == "add_member":
         name = str(data.get("name") or "").strip()
         member = str(data.get("member") or "").strip()
         if not valid_bridge_name(name) or not valid_iface_name(member):
             raise RuntimeError("Bridge name and member are required")
-        results.append(run(["ip", "link", "set", member, "master", name], timeout=10))
+        saved_cfg = bridges.get(name, {})
+        bridge_type = saved_cfg.get("bridge_type") or str(data.get("bridge_type") or "").strip()
+        if bridge_type not in ("linux", "ovs"):
+            bridge_type = "ovs" if (Path(f"/sys/class/net/{name}/bridge").exists() is False and shutil_which("ovs-vsctl")) else "linux"
+        if bridge_type == "ovs" and shutil_which("ovs-vsctl"):
+            results.append(run(["ip", "link", "set", member, "up"], timeout=10))
+            results.append(run([shutil_which("ovs-vsctl"), "add-port", name, member], timeout=10))
+        else:
+            results.append(run(["ip", "link", "set", member, "master", name], timeout=10))
         if name in bridges:
             members = bridges[name].setdefault("members", [])
             if member not in members:
@@ -1413,24 +1569,132 @@ def save_bridge(data):
         member = str(data.get("member") or "").strip()
         if not valid_bridge_name(name) or not valid_iface_name(member):
             raise RuntimeError("Bridge name and member are required")
-        results.append(run(["ip", "link", "set", member, "nomaster"], timeout=10))
+        saved_cfg = bridges.get(name, {})
+        bridge_type = saved_cfg.get("bridge_type") or str(data.get("bridge_type") or "").strip()
+        if bridge_type not in ("linux", "ovs"):
+            bridge_type = "ovs" if (Path(f"/sys/class/net/{name}/bridge").exists() is False and shutil_which("ovs-vsctl")) else "linux"
+        if bridge_type == "ovs" and shutil_which("ovs-vsctl"):
+            results.append(run([shutil_which("ovs-vsctl"), "del-port", name, member], timeout=10))
+        else:
+            results.append(run(["ip", "link", "set", member, "nomaster"], timeout=10))
         if name in bridges:
             bridges[name].setdefault("members", [])
             if member in bridges[name]["members"]:
                 bridges[name]["members"].remove(member)
+    elif action == "update_ip":
+        name = str(data.get("name") or "").strip()
+        if not valid_bridge_name(name):
+            raise RuntimeError("Bridge name is required")
+        ip4_type = str(data.get("ip4_type") or "").strip()
+        if ip4_type not in ("dhcp", "static"):
+            ip4_type = ""
+        ip6_type = str(data.get("ip6_type") or "").strip()
+        if ip6_type not in ("dhcp", "static"):
+            ip6_type = ""
+        ip_address = str(data.get("ip_address") or "").strip()
+        ip_prefixlen = str(data.get("ip_prefixlen") or "24").strip()
+        ip_gateway = str(data.get("ip_gateway") or "").strip()
+        ip_dns = str(data.get("ip_dns") or "").strip()
+        ip_mtu = str(data.get("ip_mtu") or "").strip()
+        ip6_address = str(data.get("ip6_address") or "").strip()
+        ip6_prefixlen = str(data.get("ip6_prefixlen") or "64").strip()
+        ip6_gateway = str(data.get("ip6_gateway") or "").strip()
+        ip6_dns = str(data.get("ip6_dns") or "").strip()
+        stp = data.get("stp")
+        saved_cfg = bridges.get(name, {})
+        bridge_type = saved_cfg.get("bridge_type") or str(data.get("bridge_type") or "").strip()
+        if bridge_type not in ("linux", "ovs"):
+            bridge_type = "ovs" if (Path(f"/sys/class/net/{name}/bridge").exists() is False and shutil_which("ovs-vsctl")) else "linux"
+        if stp is not None:
+            stp = bool(stp)
+            if bridge_type == "ovs" and shutil_which("ovs-vsctl"):
+                results.append(run([shutil_which("ovs-vsctl"), "set", "Bridge", name, f"stp_enable={'true' if stp else 'false'}"], timeout=10))
+            else:
+                stp_path = Path(f"/sys/class/net/{name}/bridge/stp_state")
+                if stp_path.exists():
+                    try:
+                        stp_path.write_text("1" if stp else "0", encoding="utf-8")
+                    except Exception:
+                        results.append(run(["ip", "link", "set", name, "type", "bridge", "stp_state", "1" if stp else "0"], timeout=10))
+                else:
+                    results.append(run(["ip", "link", "set", name, "type", "bridge", "stp_state", "1" if stp else "0"], timeout=10))
+        results.append(run(["ip", "addr", "flush", "dev", name, "scope", "global"], timeout=10))
+        if ip_mtu:
+            results.append(run(["ip", "link", "set", name, "mtu", ip_mtu], timeout=10))
+        if ip4_type == "static":
+            if ip_address:
+                results.append(run(["ip", "addr", "add", f"{ip_address}/{ip_prefixlen or '24'}", "dev", name], timeout=10))
+            if ip_gateway:
+                results.append(run(["ip", "route", "replace", "default", "via", ip_gateway, "dev", name], timeout=10))
+        elif ip4_type == "dhcp":
+            if shutil_which("dhclient"):
+                results.append(run(["dhclient", "-1", "-4", name], timeout=30))
+            elif shutil_which("udhcpc"):
+                results.append(run(["udhcpc", "-i", name, "-n", "-q"], timeout=30))
+        if ip6_type == "static":
+            if ip6_address:
+                results.append(run(["ip", "addr", "add", f"{ip6_address}/{ip6_prefixlen or '64'}", "dev", name], timeout=10))
+            if ip6_gateway:
+                results.append(run(["ip", "-6", "route", "replace", "default", "via", ip6_gateway, "dev", name], timeout=10))
+        elif ip6_type == "dhcp":
+            if shutil_which("dhclient"):
+                results.append(run(["dhclient", "-1", "-6", name], timeout=30))
+            elif shutil_which("udhcpc"):
+                results.append(run(["udhcpc", "-i", name, "-n", "-q"], timeout=30))
+        dns_servers = []
+        if ip4_type == "static":
+            for ns in ip_dns.split(","):
+                ns = ns.strip()
+                if ns:
+                    dns_servers.append(ns)
+        if ip6_type == "static":
+            for ns in ip6_dns.split(","):
+                ns = ns.strip()
+                if ns:
+                    dns_servers.append(ns)
+        if dns_servers:
+            resolv_content = "\n".join([f"nameserver {ns}" for ns in dns_servers]) + "\n"
+            try:
+                Path("/etc/resolv.conf").write_text(resolv_content, encoding="utf-8")
+            except Exception:
+                pass
+        if name not in bridges:
+            bridges[name] = {"bridge_type": bridge_type, "stp": False, "members": [], "ip_type": "", "ip4_type": "", "ip6_type": "", "ip_address": "", "ip_prefixlen": "", "ip_gateway": "", "ip_dns": "", "ip_mtu": "", "ip6_address": "", "ip6_prefixlen": "", "ip6_gateway": "", "ip6_dns": ""}
+        if stp is not None:
+            bridges[name]["stp"] = stp
+        bridges[name]["bridge_type"] = bridge_type
+        bridges[name]["ip_type"] = ip4_type or ip6_type or ""
+        bridges[name]["ip4_type"] = ip4_type
+        bridges[name]["ip6_type"] = ip6_type
+        bridges[name]["ip_address"] = ip_address
+        bridges[name]["ip_prefixlen"] = ip_prefixlen or "24"
+        bridges[name]["ip_gateway"] = ip_gateway
+        bridges[name]["ip_dns"] = ip_dns
+        bridges[name]["ip_mtu"] = ip_mtu
+        bridges[name]["ip6_address"] = ip6_address
+        bridges[name]["ip6_prefixlen"] = ip6_prefixlen or "64"
+        bridges[name]["ip6_gateway"] = ip6_gateway
+        bridges[name]["ip6_dns"] = ip6_dns
     elif action == "update_stp":
         name = str(data.get("name") or "").strip()
         stp = data.get("stp", False)
         if not valid_bridge_name(name):
             raise RuntimeError("Bridge name is required")
-        stp_path = Path(f"/sys/class/net/{name}/bridge/stp_state")
-        if stp_path.exists():
-            try:
-                stp_path.write_text("1" if stp else "0", encoding="utf-8")
-            except Exception:
-                results.append(run(["ip", "link", "set", name, "type", "bridge", "stp_state", "1" if stp else "0"], timeout=10))
+        saved_cfg = bridges.get(name, {})
+        bridge_type = saved_cfg.get("bridge_type") or str(data.get("bridge_type") or "").strip()
+        if bridge_type not in ("linux", "ovs"):
+            bridge_type = "ovs" if (Path(f"/sys/class/net/{name}/bridge").exists() is False and shutil_which("ovs-vsctl")) else "linux"
+        if bridge_type == "ovs" and shutil_which("ovs-vsctl"):
+            results.append(run([shutil_which("ovs-vsctl"), "set", "Bridge", name, f"stp_enable={'true' if stp else 'false'}"], timeout=10))
         else:
-            results.append(run(["ip", "link", "set", name, "type", "bridge", "stp_state", "1" if stp else "0"], timeout=10))
+            stp_path = Path(f"/sys/class/net/{name}/bridge/stp_state")
+            if stp_path.exists():
+                try:
+                    stp_path.write_text("1" if stp else "0", encoding="utf-8")
+                except Exception:
+                    results.append(run(["ip", "link", "set", name, "type", "bridge", "stp_state", "1" if stp else "0"], timeout=10))
+            else:
+                results.append(run(["ip", "link", "set", name, "type", "bridge", "stp_state", "1" if stp else "0"], timeout=10))
         if name in bridges:
             bridges[name]["stp"] = bool(stp)
     state["bridges"] = bridges
@@ -1440,7 +1704,7 @@ def save_bridge(data):
         errors = [f'{r["cmd"]}: {r["stderr"] or r["stdout"] or "failed"}' for r in results if r.get("rc") != 0]
         if errors:
             raise RuntimeError("; ".join(errors))
-    return {"bridges": read_bridges(), "available_ifaces": [i["name"] for i in list_network()["interfaces"]], "results": results}
+    return {"bridges": read_bridges(), "saved_bridges": bridges, "available_ifaces": [i["name"] for i in list_network()["interfaces"]], "results": results}
 
 
 def write_network_service(network):
@@ -1488,14 +1752,66 @@ def write_bridge_service(bridges):
         safe_bname = clean_iface_name(bname)
         if not safe_bname:
             continue
-        lines.append(f"ip link add name {safe_bname} type bridge 2>/dev/null || true")
-        lines.append(f"ip link set {safe_bname} type bridge stp_state {'1' if bcfg.get('stp') else '0'} 2>/dev/null || true")
+        bridge_type = bcfg.get("bridge_type", "linux")
+        if bridge_type == "ovs":
+            lines.append(f"command -v ovs-vsctl >/dev/null 2>&1 || true")
+            lines.append(f"ovs-vsctl add-br {safe_bname} 2>/dev/null || true")
+            lines.append(f"ovs-vsctl set Bridge {safe_bname} stp_enable={'true' if bcfg.get('stp') else 'false'} 2>/dev/null || true")
+        else:
+            lines.append(f"ip link add name {safe_bname} type bridge 2>/dev/null || true")
+            lines.append(f"ip link set {safe_bname} type bridge stp_state {'1' if bcfg.get('stp') else '0'} 2>/dev/null || true")
+        ip_mtu = bcfg.get("ip_mtu", "")
+        if ip_mtu:
+            lines.append(f"ip link set {safe_bname} mtu {shell_quote(ip_mtu)} 2>/dev/null || true")
         lines.append(f"ip link set {safe_bname} up || true")
         for member in bcfg.get("members") or []:
             safe_member = clean_iface_name(member)
             if safe_member:
                 lines.append(f"ip link set {safe_member} up || true")
-                lines.append(f"ip link set {safe_member} master {safe_bname} || true")
+                if bridge_type == "ovs":
+                    lines.append(f"ovs-vsctl add-port {safe_bname} {safe_member} 2>/dev/null || true")
+                else:
+                    lines.append(f"ip link set {safe_member} master {safe_bname} || true")
+        ip4_type = bcfg.get("ip4_type", "")
+        ip6_type = bcfg.get("ip6_type", "")
+        if ip4_type == "static":
+            ip_addr = bcfg.get("ip_address", "")
+            ip_prefix = bcfg.get("ip_prefixlen", "24") or "24"
+            ip_gw = bcfg.get("ip_gateway", "")
+            ip_dns = bcfg.get("ip_dns", "")
+            if ip_addr:
+                lines.append(f"ip addr add {shell_quote(ip_addr + '/' + ip_prefix)} dev {safe_bname} 2>/dev/null || true")
+            if ip_gw:
+                lines.append(f"ip route replace default via {shell_quote(ip_gw)} dev {safe_bname} 2>/dev/null || true")
+        elif ip4_type == "dhcp":
+            lines.append(f"command -v dhclient >/dev/null 2>&1 && dhclient -1 -4 {safe_bname} || true")
+            lines.append(f"command -v udhcpc >/dev/null 2>&1 && udhcpc -i {safe_bname} -n -q || true")
+        if ip6_type == "static":
+            ip6_addr = bcfg.get("ip6_address", "")
+            ip6_prefix = bcfg.get("ip6_prefixlen", "64") or "64"
+            ip6_gw = bcfg.get("ip6_gateway", "")
+            ip6_dns = bcfg.get("ip6_dns", "")
+            if ip6_addr:
+                lines.append(f"ip addr add {shell_quote(ip6_addr + '/' + ip6_prefix)} dev {safe_bname} 2>/dev/null || true")
+            if ip6_gw:
+                lines.append(f"ip -6 route replace default via {shell_quote(ip6_gw)} dev {safe_bname} 2>/dev/null || true")
+        elif ip6_type == "dhcp":
+            lines.append(f"command -v dhclient >/dev/null 2>&1 && dhclient -1 -6 {safe_bname} || true")
+            lines.append(f"command -v udhcpc >/dev/null 2>&1 && udhcpc -i {safe_bname} -n -q || true")
+        dns_entries = []
+        if ip4_type == "static":
+            for ns in bcfg.get("ip_dns", "").split(","):
+                ns = ns.strip()
+                if ns:
+                    dns_entries.append(ns)
+        if ip6_type == "static":
+            for ns in bcfg.get("ip6_dns", "").split(","):
+                ns = ns.strip()
+                if ns:
+                    dns_entries.append(ns)
+        if dns_entries:
+            resolv_content = "\\n".join([f"nameserver {ns}" for ns in dns_entries])
+            lines.append(f"printf '{resolv_content}\\n' > /etc/resolv.conf 2>/dev/null || true")
     BRIDGE_APPLY.write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.chmod(BRIDGE_APPLY, 0o755)
     BRIDGE_SERVICE.write_text("""[Unit]
@@ -1801,11 +2117,10 @@ def read_device():
     pci = []
     pci_driver_map = {}
     if shutil_which("lspci"):
-        result_k = run(["lspci", "-knn"], timeout=15)
+        result_k = run(["lspci", "-k"], timeout=15)
         if result_k["rc"] == 0:
             current_slot = ""
             current_driver = ""
-            current_modules = ""
             for line in result_k["stdout"].splitlines():
                 stripped = line.strip()
                 if not stripped:
@@ -1813,19 +2128,15 @@ def read_device():
                 header = re.match(r"^([0-9a-f:.]+)\s+", stripped)
                 if header:
                     if current_slot:
-                        pci_driver_map[current_slot] = {"driver": current_driver, "modules": current_modules}
+                        pci_driver_map[current_slot] = current_driver
                     current_slot = header.group(1)
                     current_driver = ""
-                    current_modules = ""
                 else:
                     driver_match = re.match(r"Kernel driver in use:\s*(.+)", stripped)
                     if driver_match:
                         current_driver = driver_match.group(1).strip()
-                    modules_match = re.match(r"Kernel modules:\s*(.+)", stripped)
-                    if modules_match:
-                        current_modules = modules_match.group(1).strip()
             if current_slot:
-                pci_driver_map[current_slot] = {"driver": current_driver, "modules": current_modules}
+                pci_driver_map[current_slot] = current_driver
         result = run(["lspci", "-nn"], timeout=15)
         if result["rc"] == 0:
             for line in result["stdout"].splitlines():
@@ -1856,8 +2167,8 @@ def read_device():
                         if match3:
                             slot = match3.group(1)
                             desc = match3.group(2).strip()
-                driver_info = pci_driver_map.get(slot, {})
-                pci.append({"slot": slot, "class": cls, "class_id": class_id, "device_id": vendor_device, "description": desc, "driver": driver_info.get("driver", ""), "modules": driver_info.get("modules", "")})
+                driver = pci_driver_map.get(slot, "")
+                pci.append({"slot": slot, "class": cls, "class_id": class_id, "device_id": vendor_device, "description": desc, "driver": driver})
 
     usb = []
     usb_sysfs_drivers = {}
@@ -1983,42 +2294,39 @@ def read_port():
     return {"tcp": tcp, "udp": udp}
 
 
-def diag_ping(target, count=4, ipv6=False):
-    cmd = [shutil_which("ping6") or shutil_which("ping")] if ipv6 else [shutil_which("ping") or "ping"]
-    if not shutil_which(cmd[0]):
-        return {"ok": False, "output": "ping not found"}
-    if ipv6 and shutil_which("ping6"):
-        cmd = ["ping6"]
-    elif ipv6:
-        cmd = [shutil_which("ping"), "-6"]
-    cmd += ["-c", str(count), target]
-    result = run(cmd, timeout=count * 5 + 10)
-    return {"ok": result["rc"] == 0, "output": result["stdout"] or result["stderr"]}
-
-
-def diag_traceroute(target, ipv6=False):
-    if shutil_which("traceroute6") and ipv6:
-        cmd = ["traceroute6", target]
-    elif shutil_which("traceroute"):
-        cmd = ["traceroute"]
+def diag_stream_start(target, tool, count=4, server=None, ipv6=False):
+    if tool == "ping":
         if ipv6:
-            cmd += ["-6"]
-        cmd.append(target)
-    elif shutil_which("tracepath"):
-        cmd = ["tracepath"]
-        if ipv6:
-            cmd += ["-6"]
-        cmd.append(target)
-    else:
-        return {"ok": False, "output": "traceroute / tracepath not found"}
-    result = run(cmd, timeout=60)
-    return {"ok": result["rc"] == 0 or bool(result["stdout"]), "output": result["stdout"] or result["stderr"]}
-
-
-def diag_nslookup(target, server=None, ipv6=False):
-    cmd = [shutil_which("nslookup") or "nslookup"]
-    if not shutil_which(cmd[0]):
-        if shutil_which("dig"):
+            if shutil_which("ping6"):
+                cmd = ["ping6"]
+            else:
+                cmd = [shutil_which("ping") or "ping", "-6"]
+        else:
+            cmd = [shutil_which("ping") or "ping"]
+        cmd += ["-c", str(count), target]
+    elif tool == "traceroute":
+        if shutil_which("traceroute6") and ipv6:
+            cmd = ["traceroute6", target]
+        elif shutil_which("traceroute"):
+            cmd = ["traceroute"]
+            if ipv6:
+                cmd += ["-6"]
+            cmd.append(target)
+        elif shutil_which("tracepath"):
+            cmd = ["tracepath"]
+            if ipv6:
+                cmd += ["-6"]
+            cmd.append(target)
+        else:
+            return None, "traceroute / tracepath not found"
+    elif tool == "nslookup":
+        if shutil_which("nslookup"):
+            cmd = [shutil_which("nslookup")]
+            if server:
+                cmd += [target, server]
+            else:
+                cmd.append(target)
+        elif shutil_which("dig"):
             cmd = ["dig"]
             if ipv6:
                 cmd += ["AAAA"]
@@ -2029,33 +2337,29 @@ def diag_nslookup(target, server=None, ipv6=False):
                 cmd += ["@" + server]
             cmd += ["+noall", "+answer", "+comments"]
         else:
-            return {"ok": False, "output": "nslookup / dig not found"}
+            return None, "nslookup / dig not found"
+    elif tool == "arp":
+        if ipv6:
+            if shutil_which("ip"):
+                cmd = ["ip", "-6", "neigh", "show"]
+            elif shutil_which("ndp"):
+                cmd = ["ndp", "-a"]
+            else:
+                return None, "ip / ndp not found"
+        else:
+            if shutil_which("ip"):
+                cmd = ["ip", "neigh", "show"]
+            elif shutil_which("arp"):
+                cmd = ["arp", "-an"]
+            else:
+                return None, "ip / arp not found"
     else:
-        if server:
-            cmd += [target, server]
-        else:
-            cmd.append(target)
-    result = run(cmd, timeout=15)
-    return {"ok": result["rc"] == 0 or bool(result["stdout"]), "output": result["stdout"] or result["stderr"]}
-
-
-def diag_arp(ipv6=False):
-    if ipv6:
-        if shutil_which("ip"):
-            cmd = ["ip", "-6", "neigh", "show"]
-        elif shutil_which("ndp"):
-            cmd = ["ndp", "-a"]
-        else:
-            return {"ok": False, "output": "ip / ndp not found"}
-    else:
-        if shutil_which("ip"):
-            cmd = ["ip", "neigh", "show"]
-        elif shutil_which("arp"):
-            cmd = ["arp", "-an"]
-        else:
-            return {"ok": False, "output": "ip / arp not found"}
-    result = run(cmd, timeout=10)
-    return {"ok": result["rc"] == 0, "output": result["stdout"] or result["stderr"]}
+        return None, "unknown tool"
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        return proc, ""
+    except Exception as exc:
+        return None, str(exc)
 
 
 def read_all():
@@ -2114,18 +2418,27 @@ def dispatch():
         safe_dispatch(save_display, body)
     elif action == "readDisplay":
         json_response({"ok": True, "display": read_display()})
-    elif action == "diagPing":
-        r = diag_ping(body.get("target", ""), int(body.get("count", 4)), body.get("ipv6", False))
-        json_response({"ok": True, "success": r["ok"], "output": r["output"]})
-    elif action == "diagTraceroute":
-        r = diag_traceroute(body.get("target", ""), body.get("ipv6", False))
-        json_response({"ok": True, "success": r["ok"], "output": r["output"]})
-    elif action == "diagNslookup":
-        r = diag_nslookup(body.get("target", ""), body.get("server") or None, body.get("ipv6", False))
-        json_response({"ok": True, "success": r["ok"], "output": r["output"]})
-    elif action == "diagArp":
-        r = diag_arp(body.get("ipv6", False))
-        json_response({"ok": True, "success": r["ok"], "output": r["output"]})
+    elif action == "diagStream":
+        tool = body.get("tool", "ping")
+        target = body.get("target", "")
+        count = int(body.get("count", 4))
+        server = body.get("server") or None
+        ipv6 = body.get("ipv6", False)
+        proc, err = diag_stream_start(target, tool, count, server, ipv6)
+        if err:
+            json_response({"ok": False, "message": err}, 400)
+            return
+        wfile = sse_response()
+        try:
+            for line in proc.stdout:
+                sse_send(wfile, "data", {"line": line.rstrip("\n")})
+            proc.wait()
+            sse_send(wfile, "done", {"rc": proc.returncode})
+        except Exception as exc:
+            sse_send(wfile, "error", {"message": str(exc)})
+            proc.kill()
+        finally:
+            proc.stdout.close()
     else:
         json_response({"ok": False, "message": "unsupported action"}, 400)
 
