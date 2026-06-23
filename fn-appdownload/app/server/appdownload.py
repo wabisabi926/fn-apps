@@ -30,14 +30,44 @@ DEFAULT_SETTINGS = {
     "thirdPartySources": [
         {
             "name": "RROrg",
-            "url": "https://gh-proxy.com/https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fnpack.json",
+            "url": "https://raw.githubusercontent.com/RROrg/fn-apps/refs/heads/main/fnpack.json",
             "enabled": True,
         }
     ],
+    "githubProxyEnabled": True,
+    "githubProxyUrl": "https://gh-proxy.com/",
 }
 
 REQUEST_CONTEXT = threading.local()
 TASKS_STATE = {"tasks": {}}
+
+GITHUB_DOMAINS = (
+    "https://github.com/",
+    "https://gist.github.com/",
+    "https://codeload.github.com/",
+    "https://raw.githubusercontent.com/",
+    "https://objects.githubusercontent.com/",
+    "https://github-releases.githubusercontent.com/",
+)
+
+
+def apply_github_proxy(url, settings=None):
+    if not url or not isinstance(url, str):
+        return url or ""
+    if settings is None:
+        settings = read_settings()
+    if not settings.get("githubProxyEnabled", True):
+        return url
+    proxy_url = str(settings.get("githubProxyUrl") or "").strip()
+    if not proxy_url:
+        return url
+    proxy_base = proxy_url.rstrip("/")
+    if url.startswith(proxy_base + "/") or url == proxy_base:
+        return url
+    for domain in GITHUB_DOMAINS:
+        if url.startswith(domain):
+            return proxy_base + "/" + url
+    return url
 
 
 @contextmanager
@@ -274,6 +304,10 @@ def read_settings():
     download_dir_value = str(data.get("downloadDir") or "").strip()
     if not download_dir_value:
         data["downloadDir"] = str(DEFAULT_DOWNLOAD_DIR)
+    if data.get("githubProxyEnabled") is None:
+        data["githubProxyEnabled"] = True
+    if not data.get("githubProxyUrl"):
+        data["githubProxyUrl"] = DEFAULT_SETTINGS.get("githubProxyUrl", "https://gh-proxy.com/")
     return data
 
 
@@ -626,7 +660,7 @@ def normalize_official_item(item, latest_by_app, tasks, override_version=None, o
             )
         ),
         "version": version,
-        "icon": pick(item, ("icon", "iconUrl", "icon_url", "logo"), ""),
+        "icon": apply_github_proxy(pick(item, ("icon", "iconUrl", "icon_url", "logo"), ""), settings),
         "source": "官方商店",
         "sourceID": source_id,
         "packageSourceType": "cloud",
@@ -747,6 +781,7 @@ def official_apps(settings=None, token=None):
 
 
 def load_source_json(url):
+    url = apply_github_proxy(url)
     if url.startswith("file://"):
         return json.loads(
             Path(urllib.parse.urlparse(url).path).read_text(encoding="utf-8-sig")
@@ -786,6 +821,7 @@ def normalize_third_party_item(app_id, item, source_name, source_url="", setting
         icon_value = f"{base}/{app_id}/ICON.PNG"
     if not download_url_value and base and app_id:
         download_url_value = f"{base}/{app_id}/{app_id}.fpk"
+    icon_value = apply_github_proxy(icon_value, settings)
     return {
         "id": app_id,
         "store": "thirdparty",
@@ -934,7 +970,12 @@ def save_settings(payload):
                     "enabled": bool(source.get("enabled", True)),
                 }
             )
-    data = {"downloadDir": download_dir_value, "thirdPartySources": clean_sources}
+    data = {
+        "downloadDir": download_dir_value,
+        "thirdPartySources": clean_sources,
+        "githubProxyEnabled": bool(payload.get("githubProxyEnabled", True)),
+        "githubProxyUrl": str(payload.get("githubProxyUrl") or DEFAULT_SETTINGS.get("githubProxyUrl", "https://gh-proxy.com/")).strip(),
+    }
     write_json_file(SETTINGS_FILE, data)
     download_dir(data).mkdir(parents=True, exist_ok=True)
     return data
@@ -1006,6 +1047,7 @@ def delete_download(app):
 
 def download_worker(key, url, target):
     ensure_dirs()
+    url = apply_github_proxy(url)
     Path(target).parent.mkdir(parents=True, exist_ok=True)
     tmp = f"{target}.part"
     try:
@@ -1019,8 +1061,8 @@ def download_worker(key, url, target):
                     break
                 output.write(chunk)
         os.replace(tmp, target)
-        finalize_download_file(target)
         update_task(key, status="downloaded", path=target, fileExists=True, error="")
+        finalize_download_file(target)
     except Exception as exc:
         try:
             if os.path.exists(tmp):
@@ -1089,13 +1131,15 @@ def status_payload(apps=None, skip_remote=False):
             task["fileExists"] = exists
             changed = True
         if is_done_status(task.get("status")) and not exists:
-            task["status"] = "deleted"
-            task["deleted"] = True
-            task["path"] = ""
-            task["fileExists"] = False
-            task["updatedAt"] = int(time.time())
-            changed = True
-            continue
+            age = int(time.time()) - int(task.get("updatedAt") or 0)
+            if age > 10:
+                task["status"] = "deleted"
+                task["deleted"] = True
+                task["path"] = ""
+                task["fileExists"] = False
+                task["updatedAt"] = int(time.time())
+                changed = True
+                continue
         if task.get("deleted"):
             continue
         if task.get("store") != "official" or not task.get("taskId"):

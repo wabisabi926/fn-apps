@@ -72,6 +72,7 @@ const I18N = {
     communitySupport: "社区支持",
     sponsorSupport: "赞助支持",
     join: "点击加入",
+    githubProxy: "GitHub 加速",
   },
   "en-US": {
     appTitle: "App Download",
@@ -129,6 +130,7 @@ const I18N = {
     communitySupport: "Community Support",
     sponsorSupport: "Sponsor Support",
     join: "Join",
+    githubProxy: "GitHub Proxy",
   },
 };
 
@@ -166,22 +168,36 @@ function applyFileStatus(files = {}) {
   state.apps.forEach((app) => {
     const file = files[taskKey(app)];
     if (!file) return;
-    app.downloaded = Boolean(file.exists);
-    app.path = file.exists ? file.path || app.path || "" : "";
+    const task = taskFor(app);
+    const taskDone = [
+      "downloaded",
+      "done",
+      "success",
+      "succeed",
+      "finished",
+      "completed",
+    ].includes(normalizeStatus(task.status)) ||
+    ["已下载", "下载完成"].includes(task.status);
     if (file.exists) {
+      app.downloaded = true;
+      app.path = file.path || app.path || "";
       app.status = "downloaded";
-    } else if (
-      [
-        "downloaded",
-        "done",
-        "success",
-        "succeed",
-        "finished",
-        "completed",
-      ].includes(normalizeStatus(app.status)) ||
-      ["已下载", "下载完成"].includes(app.status)
-    ) {
-      app.status = "";
+    } else if (!taskDone) {
+      app.downloaded = false;
+      app.path = "";
+      if (
+        [
+          "downloaded",
+          "done",
+          "success",
+          "succeed",
+          "finished",
+          "completed",
+        ].includes(normalizeStatus(app.status)) ||
+        ["已下载", "下载完成"].includes(app.status)
+      ) {
+        app.status = "";
+      }
     }
   });
 }
@@ -450,6 +466,11 @@ function showToast(message, isError = false) {
 let _fnAppRemote = null;
 let _fnAppConnectPromise = null;
 
+function invalidateFnAppRemote() {
+  _fnAppRemote = null;
+  _fnAppConnectPromise = null;
+}
+
 function connectFnApp() {
   if (_fnAppRemote) return Promise.resolve(_fnAppRemote);
   if (_fnAppConnectPromise) return _fnAppConnectPromise;
@@ -542,17 +563,60 @@ async function openFileManager(path) {
   const fmPath = toFileManagerPath(path);
   try {
     const remote = await connectFnApp();
+    let method;
+    let args;
     if (typeof remote.openFileManagerApp === "function") {
-      await remote.openFileManagerApp(fmPath);
+      method = "openFileManagerApp";
+      args = [fmPath];
     } else if (typeof remote.openCustomApp === "function") {
-      await remote.openCustomApp("trim.file-manager", "app-share-files", {
+      method = "openCustomApp";
+      args = ["trim.file-manager", "app-share-files", {
         params: {
           key: "app-share-files",
           path: fmPath.replace(/^\//, ""),
         },
-      });
+      }];
     } else {
       openFileManagerFallback(path);
+      return;
+    }
+    try {
+      await Promise.race([
+        remote[method](...args),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
+      ]);
+    } catch (callErr) {
+      invalidateFnAppRemote();
+      if (callErr.message === "timeout") {
+        try {
+          const retryRemote = await connectFnApp();
+          let retryMethod;
+          let retryArgs;
+          if (typeof retryRemote.openFileManagerApp === "function") {
+            retryMethod = "openFileManagerApp";
+            retryArgs = [fmPath];
+          } else if (typeof retryRemote.openCustomApp === "function") {
+            retryMethod = "openCustomApp";
+            retryArgs = ["trim.file-manager", "app-share-files", {
+              params: {
+                key: "app-share-files",
+                path: fmPath.replace(/^\//, ""),
+              },
+            }];
+          } else {
+            openFileManagerFallback(path);
+            return;
+          }
+          await Promise.race([
+            retryRemote[retryMethod](...retryArgs),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
+          ]);
+        } catch {
+          openFileManagerFallback(path);
+        }
+      } else {
+        openFileManagerFallback(path);
+      }
     }
   } catch (_error) {
     openFileManagerFallback(path);
@@ -683,6 +747,10 @@ async function loadSettings() {
   };
   document.getElementById("downloadDirInput").value =
     state.settings.downloadDir || "";
+  document.getElementById("githubProxyToggle").checked =
+    state.settings.githubProxyEnabled !== false;
+  document.getElementById("githubProxyUrlInput").value =
+    state.settings.githubProxyUrl || "";
   renderSourceList(state.settings.thirdPartySources || []);
 }
 
@@ -928,6 +996,8 @@ function bindEvents() {
         const result = await api("save-settings", {
           downloadDir: document.getElementById("downloadDirInput").value.trim(),
           thirdPartySources: collectSources(),
+          githubProxyEnabled: document.getElementById("githubProxyToggle").checked,
+          githubProxyUrl: document.getElementById("githubProxyUrlInput").value.trim(),
         });
         state.settings = result.settings || state.settings;
         renderSourceList(state.settings.thirdPartySources || []);
