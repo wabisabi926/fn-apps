@@ -2,7 +2,6 @@
 import argparse
 import json
 import os
-import platform as py_platform
 import re
 import shutil
 import stat
@@ -19,7 +18,7 @@ FNPACK_URLS = {
 
 
 def is_windows():
-    return py_platform.system().lower().startswith("win")
+    return sys.platform == "win32"
 
 
 def read_text(path):
