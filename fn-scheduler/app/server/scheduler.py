@@ -2350,6 +2350,11 @@ class SchedulerRequestHandler(BaseHTTPRequestHandler):
                 runner = TaskRunner(ctx.db, task, "manual", ctx.settings)
                 runner.start()
                 runners.append(runner)
+                if task.get("trigger_type") == "schedule" and task.get("schedule_expression"):
+                    try:
+                        ctx.db.schedule_next_run(task_id, task["schedule_expression"])
+                    except Exception:
+                        logger.exception("Failed to reschedule task %s after batch manual run", task_id)
                 result.setdefault("queued", []).append(task_id)
                 continue
 
@@ -2398,6 +2403,11 @@ class SchedulerRequestHandler(BaseHTTPRequestHandler):
             )
             return
         TaskRunner(ctx.db, task, "manual", ctx.settings).start()
+        if task.get("trigger_type") == "schedule" and task.get("schedule_expression"):
+            try:
+                ctx.db.schedule_next_run(task_id, task["schedule_expression"])
+            except Exception:
+                logger.exception("Failed to reschedule task %s after manual run", task_id)
         self._json_response({"queued": True})
 
     def _stop_task(self, task_id: int) -> None:
