@@ -1,5 +1,5 @@
 appname               = fn-grafana-alloy
-version               = 1.16.3
+version               = 1.17.0
 display_name          = "${common.display_name}"
 desc                  = "${common.desc}"
 platform              = all
