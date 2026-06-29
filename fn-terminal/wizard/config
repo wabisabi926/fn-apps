@@ -21,6 +21,22 @@
             "value": "login"
           }
         ]
+      },
+      {
+        "type": "radio",
+        "field": "wizard_right_type",
+        "label": "${wizard.config_item2_label}",
+        "initValue": "tmux",
+        "options": [
+          {
+            "label": "${wizard.config_item2_options1}",
+            "value": "tmux"
+          },
+          {
+            "label": "${wizard.config_item2_options2}",
+            "value": "base"
+          }
+        ]
       }
     ]
   }
