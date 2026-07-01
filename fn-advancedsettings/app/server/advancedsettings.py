@@ -2150,7 +2150,7 @@ def read_device():
                 class_id = ""
                 desc = line
                 vendor_device = ""
-                match = re.match(r"^([0-9a-f:.]+)\s+(.+?)\s*\[([0-9a-f]{4})\]\s*:\s*(.+?)\s*\[([0-9a-f]{4}:[0-9a-f]{4})\]\s*$", line)
+                match = re.match(r"^([0-9a-f:.]+)\s+(.+?)\s*\[([0-9a-f]{4})\]\s*:\s*(.+?)\s*\[([0-9a-f]{4}:[0-9a-f]{4})\]\s*(?:\(rev\s+\S+\))?\s*$", line)
                 if match:
                     slot = match.group(1)
                     cls = match.group(2).strip()
