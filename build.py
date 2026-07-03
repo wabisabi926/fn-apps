@@ -195,12 +195,12 @@ def app_metadata(root, app_dir, package_path, repo, tag):
 def write_metadata(root, rows, repo, tag):
     apps_list = root / "apps-list.md"
     lines = [
-        "| 应用名称 | 版本 | 平台 | 描述 |",
-        "|----------|------|------|------|",
+        "| 应用名称 | 显示名称 | 版本 | 平台 | 描述 |",
+        "|---------|---------|------|------|------|",
     ]
     for row in rows:
         meta = row["meta"]
-        lines.append(f"| {row['app_name']} | v{meta['version']} | {meta['platform']} | {meta['desc']} |")
+        lines.append(f"| {row['app_name']} | {meta['display_name']} | v{meta['version']} | {meta['platform']} | {meta['desc']} |")
     lines.append("")
     lines.append(f"![](https://img.shields.io/github/downloads/{repo}/{tag}/total)")
     apps_list.write_text("\n".join(lines) + "\n", encoding="utf-8")
