@@ -45,6 +45,7 @@ PATHS = {
     "grub": Path("/etc/default/grub"),
     "logind": Path("/etc/systemd/logind.conf"),
     "sshd": Path("/etc/ssh/sshd_config"),
+    "sshd_custom": Path("/etc/ssh/sshd_config.d/trim_sshd.conf"),
     "resolv": Path("/etc/resolv.conf"),
     "hosts": Path("/etc/hosts"),
     "environment": Path("/etc/environment"),
@@ -447,7 +448,8 @@ def save_power(data):
     return {"power": read_power(), "results": results}
 
 
-SSH_FIELDS = ["PermitRootLogin", "PasswordAuthentication", "PubkeyAuthentication", "PermitEmptyPasswords", "GatewayPorts", "X11Forwarding"]
+SSH_FIELDS = ["PermitRootLogin", "PasswordAuthentication", "PubkeyAuthentication", "PermitEmptyPasswords", "PermitTTY", "X11Forwarding", "AllowTcpForwarding", "AllowAgentForwarding", "GatewayPorts"]
+SSH_DEFAULTS = {"PermitRootLogin": "prohibit-password", "PasswordAuthentication": "yes", "PubkeyAuthentication": "yes", "PermitEmptyPasswords": "no", "PermitTTY": "yes", "X11Forwarding": "no", "AllowTcpForwarding": "yes", "AllowAgentForwarding": "yes", "GatewayPorts": "no"}
 SSH_START_COMMANDS = [["systemctl", "start", "ssh"], ["systemctl", "start", "sshd"], ["/etc/init.d/ssh", "start"]]
 SSH_RESTART_COMMANDS = [["systemctl", "restart", "ssh"], ["systemctl", "restart", "sshd"], ["/etc/init.d/ssh", "restart"]]
 
@@ -473,6 +475,7 @@ def parse_sshd(text):
 
 def ensure_sshd_config():
     ensure_sshd_runtime_dir()
+    PATHS["sshd_custom"].parent.mkdir(parents=True, exist_ok=True)
     if PATHS["sshd"].exists():
         return []
     results = try_run_many(SSH_START_COMMANDS)
@@ -518,15 +521,18 @@ def change_root_password(password):
 def save_sshd(data):
     results = ensure_sshd_config()
     changes = {key: str(value) for key, value in (data.get("changes") or {}).items() if key in SSH_FIELDS}
-    text = data.get("content") if data.get("content") is not None else read_text(PATHS["sshd"])
+    if not changes and not data.get("password"):
+        return {"ssh": read_ssh(), "results": results}
+    custom_text = read_text(PATHS["sshd_custom"])
     for key, value in changes.items():
-        pattern = re.compile(rf"^[#\s]*{re.escape(key)}\b.*$", re.MULTILINE)
-        replacement = f"{key} {value}"
-        text = pattern.sub(replacement, text) if pattern.search(text) else text.rstrip() + "\n" + replacement + "\n"
-    validate_sshd_content(text)
+        pattern = re.compile(rf"^[#\s]*{re.escape(key)}\b.*$\n?", re.MULTILINE)
+        custom_text = pattern.sub("", custom_text)
+        custom_text = custom_text.rstrip() + "\n" + f"{key} {value}" + "\n"
+    main_text = read_text(PATHS["sshd"])
+    validate_sshd_content(main_text + "\n" + custom_text)
     if data.get("password"):
         results.append(change_root_password(str(data.get("password"))))
-    write_text(PATHS["sshd"], text)
+    write_text(PATHS["sshd_custom"], custom_text)
     if data.get("apply"):
         results.extend(try_run_many(SSH_RESTART_COMMANDS))
     if results:
@@ -538,7 +544,11 @@ def save_sshd(data):
 
 def read_ssh():
     text = read_text(PATHS["sshd"])
-    return {"content": text, "parsed": parse_sshd(text), "service": read_service_active("sshd")}
+    custom_text = read_text(PATHS["sshd_custom"])
+    parsed = {k: SSH_DEFAULTS.get(k, "") for k in SSH_FIELDS if k in SSH_DEFAULTS}
+    parsed.update(parse_sshd(text))
+    parsed.update(parse_sshd(custom_text))
+    return {"content": text, "custom": custom_text, "parsed": parsed, "service": read_service_active("sshd")}
 
 
 def _display_forced_off_path(name):

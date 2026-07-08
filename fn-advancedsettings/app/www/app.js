@@ -38,14 +38,17 @@ const powerFields = [
   "HandleLidSwitch", "HandleLidSwitchExternalPower", "HandleLidSwitchDocked",
 ];
 
-const sshFields = ["PermitRootLogin", "PasswordAuthentication", "PubkeyAuthentication", "PermitEmptyPasswords", "GatewayPorts", "X11Forwarding"];
+const sshFields = ["PermitRootLogin", "PasswordAuthentication", "PubkeyAuthentication", "PermitEmptyPasswords", "PermitTTY", "X11Forwarding", "AllowTcpForwarding", "AllowAgentForwarding", "GatewayPorts"];
 const sshOptions = {
   PermitRootLogin: ["yes", "no", "prohibit-password"],
   PasswordAuthentication: ["yes", "no"],
   PubkeyAuthentication: ["yes", "no"],
   PermitEmptyPasswords: ["yes", "no"],
-  GatewayPorts: ["yes", "no", "clientspecified"],
+  PermitTTY: ["yes", "no"],
   X11Forwarding: ["yes", "no"],
+  AllowTcpForwarding: ["yes", "no"],
+  AllowAgentForwarding: ["yes", "no"],
+  GatewayPorts: ["yes", "no", "clientspecified"],
 };
 const bootFields = ["GRUB_TIMEOUT", "GRUB_CMDLINE_LINUX_DEFAULT", "GRUB_DEFAULT", "GRUB_DISABLE_OS_PROBER", "GRUB_CMDLINE_LINUX"];
 
@@ -221,8 +224,11 @@ const I18N = {
     PasswordAuthentication: "允许密码登录",
     PubkeyAuthentication: "允许密钥登录",
     PermitEmptyPasswords: "允许空密码",
-    GatewayPorts: "允许远程网关端口",
+    PermitTTY: "允许 TTY 分配",
     X11Forwarding: "允许 X11 转发",
+    AllowTcpForwarding: "允许 TCP 转发",
+    AllowAgentForwarding: "允许 Agent 转发",
+    GatewayPorts: "允许远程网关端口",
     http_proxy: "HTTP 代理",
     https_proxy: "HTTPS 代理",
     ftp_proxy: "FTP 代理",
@@ -477,8 +483,11 @@ const I18N = {
     PasswordAuthentication: "Allow password login",
     PubkeyAuthentication: "Allow key login",
     PermitEmptyPasswords: "Allow empty passwords",
-    GatewayPorts: "Allow remote gateway ports",
+    PermitTTY: "Allow TTY allocation",
     X11Forwarding: "Allow X11 forwarding",
+    AllowTcpForwarding: "Allow TCP forwarding",
+    AllowAgentForwarding: "Allow agent forwarding",
+    GatewayPorts: "Allow remote gateway ports",
     http_proxy: "HTTP proxy",
     https_proxy: "HTTPS proxy",
     ftp_proxy: "FTP proxy",
