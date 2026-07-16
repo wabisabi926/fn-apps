@@ -1,6 +1,13 @@
 [
   {
     "arch": "aarch64",
+    "hash": "8c9553d65d98e265d27a00af54c1cc35",
+    "name": "ARM UEFI ISO",
+    "url": "https://download.liveupdate.fygonas.com/arm/iso/armsr/fygoos_PE_arm_1.2.0007_armsr_1837.iso",
+    "version": "armsr"
+  },
+  {
+    "arch": "aarch64",
     "hash": "39230c0b64c8401a038aa5f2288e5967",
     "name": "FriendlyELEC CM3588 NAS",
     "url": "https://download.liveupdate.fygonas.com/arm/image/1.2.0007/cm3588-nas/fygoos_PE_arm_1.2.0007_cm3588-nas_1834.img.gz",
@@ -187,5 +194,12 @@
     "name": "FygoOS-x86_64",
     "url": "https://download.liveupdate.fygonas.com/x86/iso/fygoos_PE_x86_1.2.0007_1847.iso",
     "version": "1.2.0007"
+  },
+  {
+    "arch": "x86_64",
+    "hash": "dda7b50cbd765a4d8c8af3c8703a4ee1",
+    "name": "FygoOS-x86_64",
+    "url": "https://download.liveupdate.fygonas.com/x86_64/trim/fygoos_PE_x86_1.2.0203_2150.iso",
+    "version": "1.2.0203"
   }
 ]
