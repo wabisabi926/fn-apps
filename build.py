@@ -173,6 +173,7 @@ def app_metadata(root, app_dir, package_path, repo, tag):
     distributor = resolve_manifest_value(app_dir, "distributor")
     distributor_url = resolve_manifest_value(app_dir, "distributor_url")
     storage_label = "系统空间" if install_type == "root" else "存储空间"
+    docker_string = "true" if (app_dir / "app/docker/docker-compose.yaml").exists() else "false"
     repo = repo or "RROrg/fn-apps"
     tag = tag or "local"
     return {
@@ -188,6 +189,7 @@ def app_metadata(root, app_dir, package_path, repo, tag):
         "size": package_size(package_path),
         "download_url": f"https://github.com/{repo}/releases/download/{tag}/{package_path.name}",
         "install_type": storage_label,
+        "isdocker": docker_string,
         "changelog": f"Initial release of {app_name} package.",
     }
 
